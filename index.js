@@ -1,153 +1,126 @@
-const express = require('express');
-const app = express();
-
-// KEEP ALIVE
-app.get('/', (req, res) => {
-  res.send('Bot activo');
-});
-
-app.listen(process.env.PORT, '0.0.0.0', () => {
-  console.log('Web activa');
-});
-
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const fs = require('fs');
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
-  ]
+  intents: [GatewayIntentBits.Guilds]
 });
 
-// 🔑 CONFIG NUEVA
+// ===== CONFIG (YA LISTO) =====
 const TOKEN = process.env.TOKEN;
-const CLIENT_ID = '1499918194209460275';
-const GUILD_ID = '1123790874741047356';
-const rolID = '1249140217663979622';
+const CLIENT_ID = '1500333360344469524';
+const GUILD_ID = '1488371938265923705';
+const ROL_STAFF = '1489732918124347544';
 
-// 💰 PRECIOS
-const precios = {
-  m4: 20000,
-  ak47: 3240,
-  mp5: 2400,
-  escopeta: 2400,
-  deagle: 2400,
-  tec9: 2000,
-  uzi: 2000
-};
+const DATA_FILE = './data.json';
 
-// 📦 COMANDOS
+// ===== DATA =====
+function loadData() {
+  if (!fs.existsSync(DATA_FILE)) return {};
+  return JSON.parse(fs.readFileSync(DATA_FILE));
+}
+
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
+
+// ===== COMANDOS =====
 const commands = [
-  new SlashCommandBuilder()
-    .setName('armamento')
-    .setDescription('Ver catálogo de armamento USMC'),
 
   new SlashCommandBuilder()
-    .setName('pago')
-    .setDescription('Calcular total de armas')
-    .addStringOption(option => option.setName('arma1').setDescription('Arma 1').setRequired(true))
-    .addStringOption(option => option.setName('arma2').setDescription('Arma 2'))
-    .addStringOption(option => option.setName('arma3').setDescription('Arma 3'))
-    .addStringOption(option => option.setName('arma4').setDescription('Arma 4'))
-    .addStringOption(option => option.setName('arma5').setDescription('Arma 5'))
-].map(cmd => cmd.toJSON());
+    .setName('agregar')
+    .setDescription('Agregar efectividad')
+    .addUserOption(o =>
+      o.setName('usuario')
+        .setDescription('Usuario')
+        .setRequired(true)
+    )
+    .addIntegerOption(o =>
+      o.setName('puntos')
+        .setDescription('Cantidad de puntos')
+        .setRequired(true)
+    ),
 
-// 📡 REGISTRAR
+  new SlashCommandBuilder()
+    .setName('mep')
+    .setDescription('Ver tus puntos'),
+
+  new SlashCommandBuilder()
+    .setName('diaend')
+    .setDescription('Ver ranking del día')
+
+].map(c => c.toJSON());
+
+// ===== REGISTRAR =====
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
-(async () => {
-  try {
-    console.log('Registrando comandos...');
-    await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-      { body: commands }
-    );
-    console.log('Comandos registrados');
-  } catch (error) {
-    console.error(error);
-  }
-})();
+client.once('clientReady', async () => {
+  console.log('Bot de efectividad listo');
 
-client.on('ready', () => {
-  console.log(`Bot listo como ${client.user.tag}`);
+  await rest.put(
+    Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+    { body: commands }
+  );
 });
 
+// ===== INTERACCIONES =====
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  // 🔒 Permiso por rol
-  if (!interaction.member.roles.cache.has(rolID)) {
-    return interaction.reply({ content: 'No tienes permiso', ephemeral: true });
-  }
+  const data = loadData();
+  const userId = interaction.user.id;
 
-  // 📦 ARMAMENTO
-  if (interaction.commandName === 'armamento') {
+  try {
 
-    const embed = new EmbedBuilder()
-      .setTitle('Catálogo de Armamento - USMC')
-      .setColor(0xffffff)
-      .addFields(
-        {
-          name: 'M4',
-          value: 'Disponible desde PVT oficial\nPrecio: $20.000'
-        },
-        {
-          name: 'Armas disponibles',
-          value:
-            'AK-47 — $3.240\n' +
-            'MP5 — $2.400\n' +
-            'Escopeta — $2.400\n' +
-            'Desert Eagle — $2.400\n' +
-            'Tec-9 — $2.000\n' +
-            'Uzi — $2.000'
-        },
-        {
-          name: 'Packs',
-          value:
-            'Corto–Medio: Desert Eagle + Escopeta — $4.500\n' +
-            'Medio I: MP5 + Escopeta — $4.400\n' +
-            'Medio II: Tec-9 + Escopeta — $4.000\n' +
-            'Medio III: Uzi + Escopeta — $4.000'
-        },
-        {
-          name: 'Full Packs',
-          value:
-            'Full I: M4 + Desert Eagle + MP5 + Escopeta — $20.000\n' +
-            'Full II: AK-47 + Desert Eagle + Tec-9 + Escopeta — $10.000'
-        }
-      );
+    // ===== AGREGAR =====
+    if (interaction.commandName === 'agregar') {
 
-    return interaction.reply({ embeds: [embed] });
-  }
-
-  // 💰 PAGO
-  if (interaction.commandName === 'pago') {
-
-    const armas = [
-      interaction.options.getString('arma1'),
-      interaction.options.getString('arma2'),
-      interaction.options.getString('arma3'),
-      interaction.options.getString('arma4'),
-      interaction.options.getString('arma5')
-    ];
-
-    let total = 0;
-    let usadas = [];
-
-    for (let arma of armas) {
-      if (!arma) continue;
-
-      arma = arma.toLowerCase();
-
-      if (precios[arma]) {
-        total += precios[arma];
-        usadas.push(arma);
+      if (!interaction.member.roles.cache.has(ROL_STAFF)) {
+        return interaction.reply({
+          content: 'No tienes permiso para usar este comando.',
+          ephemeral: true
+        });
       }
+
+      const usuario = interaction.options.getUser('usuario');
+      const puntos = interaction.options.getInteger('puntos');
+
+      if (!data[usuario.id]) data[usuario.id] = 0;
+
+      data[usuario.id] += puntos;
+
+      saveData(data);
+
+      return interaction.reply(
+        `Se agregaron ${puntos} puntos a ${usuario.username}.\nTotal actual: ${data[usuario.id]}`
+      );
     }
 
-    return interaction.reply(
-      `Armas: ${usadas.join(', ')}\nTotal a pagar: $${total}\n\nDebes donar a la caja fuerte usando /donar y tomar captura y mandar comprobante de pago.`
-    );
+    // ===== MEP =====
+    if (interaction.commandName === 'mep') {
+
+      const puntos = data[userId] || 0;
+
+      return interaction.reply({
+        content: `Tienes ${puntos} puntos de efectividad.`,
+        ephemeral: true
+      });
+    }
+
+    // ===== DIAEND =====
+    if (interaction.commandName === 'diaend') {
+
+      let lista = Object.entries(data)
+        .sort((a, b) => b[1] - a[1])
+        .map(([id, puntos]) => `> <@${id}> — ${puntos} puntos`);
+
+      return interaction.reply({
+        content: `**RESUMEN DEL DÍA**\n\n${lista.join('\n') || 'Sin datos registrados'}`
+      });
+    }
+
+  } catch (error) {
+    console.error(error);
+    interaction.reply({ content: 'Error.', ephemeral: true });
   }
 });
 
