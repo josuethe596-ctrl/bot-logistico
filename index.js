@@ -20,9 +20,15 @@ const GUILD_STAFF = '1464318287683780836';
 const CANAL_PRINCIPAL = '1500533467166015638';
 const CANAL_STAFF = '1500352253293498561';
 
-// ===== ROLES STAFF =====
-const ROL_STAFF_PRINCIPAL = '1465107741550051369';
-const ROL_STAFF_STAFF = '1489732918124347544';
+// ===== ROLES POR PERMISO =====
+
+// /agregar /quitar /diaend /resets
+const ROLES_ADMIN_PRINCIPAL = ['1249089576270696508', '1249089640632422470'];
+const ROLES_ADMIN_STAFF = ['1467236078007353487'];
+
+// /ts3 /ts3pc
+const ROLES_TS3_PRINCIPAL = ['1249095569150836781'];
+const ROLES_TS3_STAFF = ['1467236084445614223'];
 
 const DATA_FILE = './data.json';
 
@@ -47,6 +53,11 @@ function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
+// ===== FUNCIONES DE VERIFICACIÓN =====
+function tieneAlgunRol(member, rolesArray) {
+  return rolesArray.some(rolId => member.roles.cache.has(rolId));
+}
+
 // ===== COMANDOS =====
 const commands = [
   new SlashCommandBuilder()
@@ -67,11 +78,11 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('diaend')
-    .setDescription('Ver ranking (Solo Staff)'),
+    .setDescription('Ver ranking (Solo Admin)'),
 
   new SlashCommandBuilder()
     .setName('resets')
-    .setDescription('Reiniciar todas las efectividades a 0 (Solo Staff)'),
+    .setDescription('Reiniciar todas las efectividades a 0 (Solo Admin)'),
 
   new SlashCommandBuilder()
     .setName('ts3')
@@ -123,10 +134,10 @@ client.on('interactionCreate', async interaction => {
     // ===== AGREGAR =====
     if (interaction.commandName === 'agregar') {
 
-      const rolRequerido = interaction.guildId === GUILD_PRINCIPAL ? ROL_STAFF_PRINCIPAL : ROL_STAFF_STAFF;
+      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_ADMIN_PRINCIPAL : ROLES_ADMIN_STAFF;
 
-      if (!interaction.member.roles.cache.has(rolRequerido)) {
-        return interaction.reply({ content: 'No autorizado.', ephemeral: true });
+      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
+        return interaction.reply({ content: 'No autorizado. Requiere rol de administrador.', ephemeral: true });
       }
 
       const usuario = interaction.options.getUser('usuario');
@@ -144,10 +155,10 @@ client.on('interactionCreate', async interaction => {
     // ===== QUITAR =====
     if (interaction.commandName === 'quitar') {
 
-      const rolRequerido = interaction.guildId === GUILD_PRINCIPAL ? ROL_STAFF_PRINCIPAL : ROL_STAFF_STAFF;
+      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_ADMIN_PRINCIPAL : ROLES_ADMIN_STAFF;
 
-      if (!interaction.member.roles.cache.has(rolRequerido)) {
-        return interaction.reply({ content: 'No autorizado.', ephemeral: true });
+      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
+        return interaction.reply({ content: 'No autorizado. Requiere rol de administrador.', ephemeral: true });
       }
 
       const usuario = interaction.options.getUser('usuario');
@@ -177,10 +188,10 @@ client.on('interactionCreate', async interaction => {
     // ===== DIAEND =====
     if (interaction.commandName === 'diaend') {
 
-      const rolRequerido = interaction.guildId === GUILD_PRINCIPAL ? ROL_STAFF_PRINCIPAL : ROL_STAFF_STAFF;
+      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_ADMIN_PRINCIPAL : ROLES_ADMIN_STAFF;
 
-      if (!interaction.member.roles.cache.has(rolRequerido)) {
-        return interaction.reply({ content: 'No autorizado.', ephemeral: true });
+      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
+        return interaction.reply({ content: 'No autorizado. Requiere rol de administrador.', ephemeral: true });
       }
 
       const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
@@ -290,10 +301,10 @@ client.on('interactionCreate', async interaction => {
     // ===== RESETS =====
     if (interaction.commandName === 'resets') {
 
-      const rolRequerido = interaction.guildId === GUILD_PRINCIPAL ? ROL_STAFF_PRINCIPAL : ROL_STAFF_STAFF;
+      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_ADMIN_PRINCIPAL : ROLES_ADMIN_STAFF;
 
-      if (!interaction.member.roles.cache.has(rolRequerido)) {
-        return interaction.reply({ content: 'No autorizado.', ephemeral: true });
+      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
+        return interaction.reply({ content: 'No autorizado. Requiere rol de administrador.', ephemeral: true });
       }
 
       for (const id in data) {
@@ -310,6 +321,13 @@ client.on('interactionCreate', async interaction => {
 
     // ===== TS3 =====
     if (interaction.commandName === 'ts3') {
+
+      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_TS3_PRINCIPAL : ROLES_TS3_STAFF;
+
+      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
+        return interaction.reply({ content: 'No autorizado. Requiere rol de TS3.', ephemeral: true });
+      }
+
       const embed = new EmbedBuilder()
         .setTitle('Terminos y Condiciones - TS3')
         .setColor(0x1B4332)
@@ -329,6 +347,13 @@ client.on('interactionCreate', async interaction => {
 
     // ===== TS3 PC =====
     if (interaction.commandName === 'ts3pc') {
+
+      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_TS3_PRINCIPAL : ROLES_TS3_STAFF;
+
+      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
+        return interaction.reply({ content: 'No autorizado. Requiere rol de TS3.', ephemeral: true });
+      }
+
       const embedDescarga = new EmbedBuilder()
         .setTitle('Link De Descarga Del TS3 (PC)')
         .setColor(0x1B4332)
