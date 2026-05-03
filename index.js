@@ -52,7 +52,11 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('diaend')
-    .setDescription('Ver ranking')
+    .setDescription('Ver ranking'),
+
+  new SlashCommandBuilder()
+    .setName('resets')
+    .setDescription('Reiniciar todas las efectividades a 0 (Solo Staff)')
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR =====
@@ -125,6 +129,26 @@ client.on('interactionCreate', async interaction => {
 
       return interaction.reply({
         content: `**RANKING DEL DÍA**\n\n${lista.join('\n') || 'Sin datos'}`
+      });
+    }
+
+    // ===== RESETS =====
+    if (interaction.commandName === 'resets') {
+
+      if (!interaction.member.roles.cache.has(ROL_STAFF)) {
+        return interaction.reply({ content: 'No autorizado.', ephemeral: true });
+      }
+
+      // Reiniciar todas las efectividades a 0
+      for (const id in data) {
+        data[id] = 0;
+      }
+
+      saveData(data);
+
+      return interaction.reply({
+        content: '✅ Todas las efectividades han sido reiniciadas a **0**. ¡Empieza de nuevo!',
+        ephemeral: true
       });
     }
 
