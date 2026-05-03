@@ -175,7 +175,7 @@ client.on('interactionCreate', async interaction => {
         )
         .setFooter({ text: 'USMC - Personal Logístico' });
 
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     // ===== SIACEPTO =====
@@ -237,15 +237,15 @@ client.on('interactionCreate', async interaction => {
         )
         .setFooter({ text: 'USMC - Personal Logístico | Uso exclusivo para miembros autorizados' });
 
-      // Enviar todos los embeds
-      await interaction.reply({ content: '✅ Has aceptado los términos y condiciones. Aquí tienes la guía completa:', ephemeral: true });
-      await interaction.followUp({ embeds: [embedInstalacion], ephemeral: true });
-      await interaction.followUp({ embeds: [embedPaso2], ephemeral: true });
-      await interaction.followUp({ embeds: [embedPaso3], ephemeral: true });
-      await interaction.followUp({ embeds: [embedConfig], ephemeral: true });
-      await interaction.followUp({ embeds: [embedConfig2], ephemeral: true });
-      await interaction.followUp({ embeds: [embedConfig3], ephemeral: true });
-      await interaction.followUp({ embeds: [embedCuenta], ephemeral: true });
+      // Enviar todos los embeds de forma PÚBLICA
+      await interaction.reply({ content: `✅ **${interaction.user.username}** ha aceptado los términos y condiciones. Aquí tienes la guía completa:` });
+      await interaction.followUp({ embeds: [embedInstalacion] });
+      await interaction.followUp({ embeds: [embedPaso2] });
+      await interaction.followUp({ embeds: [embedPaso3] });
+      await interaction.followUp({ embeds: [embedConfig] });
+      await interaction.followUp({ embeds: [embedConfig2] });
+      await interaction.followUp({ embeds: [embedConfig3] });
+      await interaction.followUp({ embeds: [embedCuenta] });
 
       return;
     }
