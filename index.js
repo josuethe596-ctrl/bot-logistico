@@ -5,7 +5,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// ===== CONFIG (YA LISTO) =====
+// ===== CONFIG =====
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = '1500333360344469524';
 const GUILD_ID = '1488371938265923705';
@@ -25,20 +25,11 @@ function saveData(data) {
 
 // ===== COMANDOS =====
 const commands = [
-
   new SlashCommandBuilder()
     .setName('agregar')
     .setDescription('Agregar efectividad')
-    .addUserOption(o =>
-      o.setName('usuario')
-        .setDescription('Usuario')
-        .setRequired(true)
-    )
-    .addIntegerOption(o =>
-      o.setName('puntos')
-        .setDescription('Cantidad de puntos')
-        .setRequired(true)
-    ),
+    .addUserOption(o => o.setName('usuario').setDescription('Usuario').setRequired(true))
+    .addIntegerOption(o => o.setName('puntos').setDescription('Cantidad').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('mep')
@@ -47,7 +38,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName('diaend')
     .setDescription('Ver ranking del día')
-
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR =====
@@ -55,11 +45,18 @@ const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 client.once('clientReady', async () => {
   console.log('Bot de efectividad listo');
+  console.log('Registrando comandos...');
 
-  await rest.put(
-    Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-    { body: commands }
-  );
+  try {
+    await rest.put(
+      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+      { body: commands }
+    );
+
+    console.log('Comandos registrados correctamente');
+  } catch (err) {
+    console.error('ERROR REGISTRANDO COMANDOS:', err);
+  }
 });
 
 // ===== INTERACCIONES =====
@@ -76,7 +73,7 @@ client.on('interactionCreate', async interaction => {
 
       if (!interaction.member.roles.cache.has(ROL_STAFF)) {
         return interaction.reply({
-          content: 'No tienes permiso para usar este comando.',
+          content: 'No tienes permiso.',
           ephemeral: true
         });
       }
@@ -91,7 +88,7 @@ client.on('interactionCreate', async interaction => {
       saveData(data);
 
       return interaction.reply(
-        `Se agregaron ${puntos} puntos a ${usuario.username}.\nTotal actual: ${data[usuario.id]}`
+        `Se agregaron ${puntos} puntos a ${usuario.username}.\nTotal: ${data[usuario.id]}`
       );
     }
 
@@ -101,7 +98,7 @@ client.on('interactionCreate', async interaction => {
       const puntos = data[userId] || 0;
 
       return interaction.reply({
-        content: `Tienes ${puntos} puntos de efectividad.`,
+        content: `Tienes ${puntos} puntos.`,
         ephemeral: true
       });
     }
@@ -114,13 +111,18 @@ client.on('interactionCreate', async interaction => {
         .map(([id, puntos]) => `> <@${id}> — ${puntos} puntos`);
 
       return interaction.reply({
-        content: `**RESUMEN DEL DÍA**\n\n${lista.join('\n') || 'Sin datos registrados'}`
+        content: `**RESUMEN DEL DÍA**\n\n${lista.join('\n') || 'Sin datos'}`
       });
     }
 
   } catch (error) {
-    console.error(error);
-    interaction.reply({ content: 'Error.', ephemeral: true });
+    console.error('ERROR:', error);
+
+    if (interaction.replied) {
+      interaction.followUp({ content: 'Error.', ephemeral: true });
+    } else {
+      interaction.reply({ content: 'Error.', ephemeral: true });
+    }
   }
 });
 
