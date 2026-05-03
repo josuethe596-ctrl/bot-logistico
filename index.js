@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 
 // ===== PROTECCIÓN ANTI-CRASH =====
@@ -56,7 +56,15 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('resets')
-    .setDescription('Reiniciar todas las efectividades a 0 (Solo Staff)')
+    .setDescription('Reiniciar todas las efectividades a 0 (Solo Staff)'),
+
+  new SlashCommandBuilder()
+    .setName('ts3')
+    .setDescription('Ver términos y condiciones de TS3'),
+
+  new SlashCommandBuilder()
+    .setName('siacepto')
+    .setDescription('Aceptar términos y recibir guía de instalación TS3')
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR =====
@@ -139,7 +147,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: 'No autorizado.', ephemeral: true });
       }
 
-      // Reiniciar todas las efectividades a 0
       for (const id in data) {
         data[id] = 0;
       }
@@ -150,6 +157,97 @@ client.on('interactionCreate', async interaction => {
         content: '✅ Todas las efectividades han sido reiniciadas a **0**. ¡Empieza de nuevo!',
         ephemeral: true
       });
+    }
+
+    // ===== TS3 =====
+    if (interaction.commandName === 'ts3') {
+      const embed = new EmbedBuilder()
+        .setTitle('📋 Términos y Condiciones - TS3')
+        .setColor(0xFF0000)
+        .setDescription(
+          'Al aceptar la cuenta de TS3 estás obligado a seguir estos términos y condiciones. Si llegas a romper estos mismos serás vetado de la facción y estarás predispuesto a recibir consecuencias aún mayores.\n\n' +
+          '• No compartir la cuenta a personas ajenas a la facción.\n' +
+          '• Prohibido hacer modificaciones sin previa autorización de los altos mandos logísticos.\n' +
+          '• Cambiar la contraseña de la cuenta de correo electrónico para beneficio propio.\n' +
+          '• Perjudicar de cualquier manera haciendo uso de las herramientas otorgadas por el personal logístico a cualquier miembro de la facción.\n\n' +
+          '**¿Aceptas los términos y condiciones?**\n' +
+          'Escribe `/siacepto` para continuar.'
+        )
+        .setFooter({ text: 'USMC - Personal Logístico' });
+
+      return interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
+    // ===== SIACEPTO =====
+    if (interaction.commandName === 'siacepto') {
+      // Paso a paso instalación
+      const embedInstalacion = new EmbedBuilder()
+        .setTitle('📱 Paso a paso para la instalación del TS3 en Android')
+        .setColor(0x0099FF)
+        .setDescription(
+          '**Paso 1.** Selecciona la opción **"continue without logging in"** para iniciar en TS3 sin tener que loguear con tus datos.'
+        )
+        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029507519840257/IMG-20251112-WA0000.jpg');
+
+      const embedPaso2 = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setDescription(
+          '**Paso 2.** Busca la opción para añadir un servidor, señalada en la imagen del paso 2.'
+        )
+        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029508036001873/IMG-20251112-WA0001.jpg');
+
+      const embedPaso3 = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setDescription(
+          '**Paso 3.** Rellena los campos que aparecen en la imagen y sustituye con tus datos.\n\n¡Listo!'
+        )
+        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029508543512606/IMG-20251112-WA0003.jpg');
+
+      // Configuración TS3
+      const embedConfig = new EmbedBuilder()
+        .setTitle('⚙️ Configuración TS3 Android')
+        .setColor(0xFFA500)
+        .setDescription(
+          '**Paso 1.** Dirígete a **ajustes**.'
+        )
+        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035784434323496/IMG-20251112-WA0004.jpg');
+
+      const embedConfig2 = new EmbedBuilder()
+        .setColor(0xFFA500)
+        .setDescription(
+          '**Paso 2.** Activa las opciones marcadas en la imagen. **Push to talk**, **superposición de PTT** y **manos libres** te ayudarán a tener una mejor experiencia al utilizar el TS3.'
+        )
+        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035784832651394/IMG-20251112-WA0005.jpg');
+
+      const embedConfig3 = new EmbedBuilder()
+        .setColor(0xFFA500)
+        .setDescription(
+          '**Paso 3.** Desactiva la opción **sensor de proximidad** mostrada en la imagen a continuación.'
+        )
+        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035785332031529/IMG-20251112-WA0006.jpg');
+
+      // Cuenta
+      const embedCuenta = new EmbedBuilder()
+        .setTitle('🔐 Cuenta Junior Enlisted')
+        .setColor(0x00FF00)
+        .setDescription(
+          '**Correo:**\n`KenwayHaytham005@gmail.com`\n\n' +
+          '**Contraseña:**\n`USMCacceso1`\n\n' +
+          '⚠️ **Recordatorio:** Antes de comenzar a utilizar este beneficio otorgado por la facción, recuerda que aceptas los **términos y condiciones** previamente establecidos. En caso de compartir estos datos con terceros o realizar modificaciones no autorizadas, estarás sujeto a sanciones faccionarias y administrativas graves.'
+        )
+        .setFooter({ text: 'USMC - Personal Logístico | Uso exclusivo para miembros autorizados' });
+
+      // Enviar todos los embeds
+      await interaction.reply({ content: '✅ Has aceptado los términos y condiciones. Aquí tienes la guía completa:', ephemeral: true });
+      await interaction.followUp({ embeds: [embedInstalacion], ephemeral: true });
+      await interaction.followUp({ embeds: [embedPaso2], ephemeral: true });
+      await interaction.followUp({ embeds: [embedPaso3], ephemeral: true });
+      await interaction.followUp({ embeds: [embedConfig], ephemeral: true });
+      await interaction.followUp({ embeds: [embedConfig2], ephemeral: true });
+      await interaction.followUp({ embeds: [embedConfig3], ephemeral: true });
+      await interaction.followUp({ embeds: [embedCuenta], ephemeral: true });
+
+      return;
     }
 
   } catch (err) {
