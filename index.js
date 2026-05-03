@@ -12,7 +12,14 @@ const client = new Client({
 // ===== CONFIG =====
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = '1500333360344469524';
-const GUILD_ID = '1488371938265923705';
+
+// ===== GUILDS Y CANALES =====
+const GUILD_PRINCIPAL = '1123790874741047356';
+const GUILD_STAFF = '1464318287683780836';
+
+const CANAL_PRINCIPAL = '1500533467166015638';
+const CANAL_STAFF = '1500352253293498561';
+
 const ROL_STAFF = '1489732918124347544';
 
 const DATA_FILE = './data.json';
@@ -38,7 +45,7 @@ function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// ===== COMANDOS =====
+// ===== COMANDOS (registrados en ambos servidores) =====
 const commands = [
   new SlashCommandBuilder()
     .setName('agregar')
@@ -52,7 +59,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('diaend')
-    .setDescription('Ver ranking'),
+    .setDescription('Ver ranking (Solo Staff)'),
 
   new SlashCommandBuilder()
     .setName('resets')
@@ -67,20 +74,28 @@ const commands = [
     .setDescription('Aceptar términos y recibir guía de instalación TS3')
 ].map(c => c.toJSON());
 
-// ===== REGISTRAR =====
+// ===== REGISTRAR COMANDOS EN AMBOS SERVIDORES =====
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
-client.once('clientReady', async () => {
+client.once('ready', async () => {
   console.log('✅ Bot iniciado correctamente');
   console.log('🔄 Registrando comandos...');
 
   try {
+    // Registrar en servidor principal
     await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+      Routes.applicationGuildCommands(CLIENT_ID, GUILD_PRINCIPAL),
       { body: commands }
     );
+    console.log('✅ Comandos registrados en servidor PRINCIPAL');
 
-    console.log('✅ Comandos registrados correctamente');
+    // Registrar en servidor staff
+    await rest.put(
+      Routes.applicationGuildCommands(CLIENT_ID, GUILD_STAFF),
+      { body: commands }
+    );
+    console.log('✅ Comandos registrados en servidor STAFF');
+
   } catch (err) {
     console.error('❌ ERROR REGISTRANDO COMANDOS:', err);
   }
@@ -126,17 +141,92 @@ client.on('interactionCreate', async interaction => {
 
     // ===== DIAEND =====
     if (interaction.commandName === 'diaend') {
-      const guild = interaction.guild;
-      const lista = Object.entries(data)
-        .sort((a, b) => b[1] - a[1])
-        .map(([id, efectividades]) => {
-          const member = guild.members.cache.get(id);
+
+      // Solo staff puede usarlo
+      if (!interaction.member.roles.cache.has(ROL_STAFF)) {
+        return interaction.reply({ content: 'No autorizado.', ephemeral: true });
+      }
+
+      const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
+      const guildStaff = client.guilds.cache.get(GUILD_STAFF);
+
+      const canalPrincipal = guildPrincipal?.channels.cache.get(CANAL_PRINCIPAL);
+      const canalStaff = guildStaff?.channels.cache.get(CANAL_STAFF);
+
+      // Preparar ranking ordenado
+      const rankingOrdenado = Object.entries(data)
+        .sort((a, b) => b[1] - a[1]);
+
+      // ===== EMBED PARA SERVIDOR PRINCIPAL (vista simple) =====
+      const listaPrincipal = rankingOrdenado
+        .map(([id, efectividades], index) => {
+          const member = guildPrincipal?.members.cache.get(id);
           const nombre = member ? member.displayName || member.user.username : 'Usuario desconocido';
-          return `> ${nombre} — ${efectividades} efectividades`;
+          const medalla = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '•';
+          return `${medalla} **${nombre}** — ${efectividades} efectividades`;
         });
 
+      const embedPrincipal = new EmbedBuilder()
+        .setTitle('🏆 RANKING DE EFECTIVIDADES')
+        .setColor(0xFFD700)
+        .setDescription(listaPrincipal.join('\n') || 'Sin datos')
+        .setFooter({ text: `Actualizado por ${interaction.user.username}` })
+        .setTimestamp();
+
+      // ===== EMBED PARA SERVIDOR STAFF (vista detallada) =====
+      const listaStaff = rankingOrdenado
+        .map(([id, efectividades], index) => {
+          const memberPrincipal = guildPrincipal?.members.cache.get(id);
+          const memberStaff = guildStaff?.members.cache.get(id);
+          const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Usuario desconocido';
+          const username = memberPrincipal?.user.username || 'N/A';
+          const userTag = memberPrincipal?.user.tag || 'N/A#0000';
+          const medalla = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+          const estaEnStaff = memberStaff ? '✅' : '❌';
+
+          return `${medalla} **${nombre}**\n` +
+                 `├ Usuario: \`${userTag}\`\n` +
+                 `├ ID: \`${id}\`\n` +
+                 `├ Efectividades: **${efectividades}**\n` +
+                 `└ En servidor Staff: ${estaEnStaff}`;
+        });
+
+      const embedStaff = new EmbedBuilder()
+        .setTitle('🏆 RANKING DETALLADO - STAFF')
+        .setColor(0xFF4500)
+        .setDescription(listaStaff.join('\n\n') || 'Sin datos')
+        .addFields(
+          { name: '📊 Total de participantes', value: `${rankingOrdenado.length}`, inline: true },
+          { name: '🔢 Total de efectividades', value: `${rankingOrdenado.reduce((a, b) => a + b[1], 0)}`, inline: true },
+          { name: '👤 Ejecutado por', value: `${interaction.user.tag}`, inline: true }
+        )
+        .setFooter({ text: 'USMC - Staff Logístico' })
+        .setTimestamp();
+
+      // Enviar a ambos canales
+      let enviadoPrincipal = false;
+      let enviadoStaff = false;
+
+      if (canalPrincipal && canalPrincipal.isTextBased()) {
+        await canalPrincipal.send({ embeds: [embedPrincipal] });
+        enviadoPrincipal = true;
+      }
+
+      if (canalStaff && canalStaff.isTextBased()) {
+        await canalStaff.send({ embeds: [embedStaff] });
+        enviadoStaff = true;
+      }
+
+      // Responder al staff que ejecutó el comando
+      const mensajes = [];
+      if (enviadoPrincipal) mensajes.push('✅ Enviado al canal principal');
+      if (enviadoStaff) mensajes.push('✅ Enviado al canal de Staff');
+      if (!enviadoPrincipal) mensajes.push('❌ No se pudo enviar al canal principal');
+      if (!enviadoStaff) mensajes.push('❌ No se pudo enviar al canal de Staff');
+
       return interaction.reply({
-        content: `**RANKING DEL DÍA**\n\n${lista.join('\n') || 'Sin datos'}`
+        content: mensajes.join('\n'),
+        ephemeral: true
       });
     }
 
@@ -180,7 +270,6 @@ client.on('interactionCreate', async interaction => {
 
     // ===== SIACEPTO =====
     if (interaction.commandName === 'siacepto') {
-      // Paso a paso instalación
       const embedInstalacion = new EmbedBuilder()
         .setTitle('📱 Paso a paso para la instalación del TS3 en Android')
         .setColor(0x0099FF)
@@ -203,7 +292,6 @@ client.on('interactionCreate', async interaction => {
         )
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029508543512606/IMG-20251112-WA0003.jpg');
 
-      // Configuración TS3
       const embedConfig = new EmbedBuilder()
         .setTitle('⚙️ Configuración TS3 Android')
         .setColor(0xFFA500)
@@ -226,7 +314,6 @@ client.on('interactionCreate', async interaction => {
         )
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035785332031529/IMG-20251112-WA0006.jpg');
 
-      // Cuenta
       const embedCuenta = new EmbedBuilder()
         .setTitle('🔐 Cuenta Junior Enlisted')
         .setColor(0x00FF00)
@@ -237,7 +324,6 @@ client.on('interactionCreate', async interaction => {
         )
         .setFooter({ text: 'USMC - Personal Logístico | Uso exclusivo para miembros autorizados' });
 
-      // Enviar todos los embeds de forma PÚBLICA
       await interaction.reply({ content: `✅ **${interaction.user.username}** ha aceptado los términos y condiciones. Aquí tienes la guía completa:` });
       await interaction.followUp({ embeds: [embedInstalacion] });
       await interaction.followUp({ embeds: [embedPaso2] });
