@@ -1,13 +1,9 @@
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 
-// ===== SEGURIDAD GLOBAL =====
-process.on('uncaughtException', err => {
-  console.error('ERROR GLOBAL:', err);
-});
-process.on('unhandledRejection', err => {
-  console.error('PROMISE ERROR:', err);
-});
+// ===== PROTECCIÓN ANTI-CRASH =====
+process.on('uncaughtException', err => console.error('ERROR GLOBAL:', err));
+process.on('unhandledRejection', err => console.error('PROMISE ERROR:', err));
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
@@ -15,19 +11,13 @@ const client = new Client({
 
 // ===== CONFIG =====
 const TOKEN = process.env.TOKEN;
-
-if (!TOKEN) {
-  console.error('❌ ERROR: NO HAY TOKEN EN VARIABLES');
-  process.exit(1);
-}
-
 const CLIENT_ID = '1500333360344469524';
 const GUILD_ID = '1488371938265923705';
 const ROL_STAFF = '1489732918124347544';
 
 const DATA_FILE = './data.json';
 
-// ===== ASEGURAR JSON =====
+// ===== CREAR JSON SI NO EXISTE =====
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, '{}');
   console.log('📁 data.json creado automáticamente');
@@ -62,7 +52,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('diaend')
-    .setDescription('Ranking')
+    .setDescription('Ver ranking')
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR =====
@@ -70,16 +60,15 @@ const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 client.once('clientReady', async () => {
   console.log('✅ Bot iniciado correctamente');
+  console.log('🔄 Registrando comandos...');
 
   try {
-    console.log('🔄 Registrando comandos...');
-
     await rest.put(
       Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
       { body: commands }
     );
 
-    console.log('✅ Comandos registrados');
+    console.log('✅ Comandos registrados correctamente');
   } catch (err) {
     console.error('❌ ERROR REGISTRANDO COMANDOS:', err);
   }
@@ -130,12 +119,12 @@ client.on('interactionCreate', async interaction => {
         .map(([id, puntos]) => `> <@${id}> — ${puntos}`);
 
       return interaction.reply({
-        content: `**RANKING**\n\n${lista.join('\n') || 'Sin datos'}`
+        content: `**RANKING DEL DÍA**\n\n${lista.join('\n') || 'Sin datos'}`
       });
     }
 
   } catch (err) {
-    console.error('ERROR INTERACCION:', err);
+    console.error('ERROR:', err);
 
     if (interaction.replied) {
       interaction.followUp({ content: 'Error.', ephemeral: true });
