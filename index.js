@@ -1,22 +1,47 @@
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 
+// ===== SEGURIDAD GLOBAL =====
+process.on('uncaughtException', err => {
+  console.error('ERROR GLOBAL:', err);
+});
+process.on('unhandledRejection', err => {
+  console.error('PROMISE ERROR:', err);
+});
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
 // ===== CONFIG =====
 const TOKEN = process.env.TOKEN;
+
+if (!TOKEN) {
+  console.error('❌ ERROR: NO HAY TOKEN EN VARIABLES');
+  process.exit(1);
+}
+
 const CLIENT_ID = '1500333360344469524';
 const GUILD_ID = '1488371938265923705';
 const ROL_STAFF = '1489732918124347544';
 
 const DATA_FILE = './data.json';
 
+// ===== ASEGURAR JSON =====
+if (!fs.existsSync(DATA_FILE)) {
+  fs.writeFileSync(DATA_FILE, '{}');
+  console.log('📁 data.json creado automáticamente');
+}
+
 // ===== DATA =====
 function loadData() {
-  if (!fs.existsSync(DATA_FILE)) return {};
-  return JSON.parse(fs.readFileSync(DATA_FILE));
+  try {
+    return JSON.parse(fs.readFileSync(DATA_FILE));
+  } catch {
+    console.log('⚠️ JSON corrupto, reiniciando...');
+    fs.writeFileSync(DATA_FILE, '{}');
+    return {};
+  }
 }
 
 function saveData(data) {
@@ -27,7 +52,7 @@ function saveData(data) {
 const commands = [
   new SlashCommandBuilder()
     .setName('agregar')
-    .setDescription('Agregar efectividad')
+    .setDescription('Agregar puntos')
     .addUserOption(o => o.setName('usuario').setDescription('Usuario').setRequired(true))
     .addIntegerOption(o => o.setName('puntos').setDescription('Cantidad').setRequired(true)),
 
@@ -37,25 +62,26 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('diaend')
-    .setDescription('Ver ranking del día')
+    .setDescription('Ranking')
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR =====
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 client.once('clientReady', async () => {
-  console.log('Bot de efectividad listo');
-  console.log('Registrando comandos...');
+  console.log('✅ Bot iniciado correctamente');
 
   try {
+    console.log('🔄 Registrando comandos...');
+
     await rest.put(
       Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
       { body: commands }
     );
 
-    console.log('Comandos registrados correctamente');
+    console.log('✅ Comandos registrados');
   } catch (err) {
-    console.error('ERROR REGISTRANDO COMANDOS:', err);
+    console.error('❌ ERROR REGISTRANDO COMANDOS:', err);
   }
 });
 
@@ -72,10 +98,7 @@ client.on('interactionCreate', async interaction => {
     if (interaction.commandName === 'agregar') {
 
       if (!interaction.member.roles.cache.has(ROL_STAFF)) {
-        return interaction.reply({
-          content: 'No tienes permiso.',
-          ephemeral: true
-        });
+        return interaction.reply({ content: 'No autorizado.', ephemeral: true });
       }
 
       const usuario = interaction.options.getUser('usuario');
@@ -87,14 +110,11 @@ client.on('interactionCreate', async interaction => {
 
       saveData(data);
 
-      return interaction.reply(
-        `Se agregaron ${puntos} puntos a ${usuario.username}.\nTotal: ${data[usuario.id]}`
-      );
+      return interaction.reply(`+${puntos} puntos a ${usuario.username}. Total: ${data[usuario.id]}`);
     }
 
     // ===== MEP =====
     if (interaction.commandName === 'mep') {
-
       const puntos = data[userId] || 0;
 
       return interaction.reply({
@@ -105,18 +125,17 @@ client.on('interactionCreate', async interaction => {
 
     // ===== DIAEND =====
     if (interaction.commandName === 'diaend') {
-
-      let lista = Object.entries(data)
+      const lista = Object.entries(data)
         .sort((a, b) => b[1] - a[1])
-        .map(([id, puntos]) => `> <@${id}> — ${puntos} puntos`);
+        .map(([id, puntos]) => `> <@${id}> — ${puntos}`);
 
       return interaction.reply({
-        content: `**RESUMEN DEL DÍA**\n\n${lista.join('\n') || 'Sin datos'}`
+        content: `**RANKING**\n\n${lista.join('\n') || 'Sin datos'}`
       });
     }
 
-  } catch (error) {
-    console.error('ERROR:', error);
+  } catch (err) {
+    console.error('ERROR INTERACCION:', err);
 
     if (interaction.replied) {
       interaction.followUp({ content: 'Error.', ephemeral: true });
@@ -126,4 +145,5 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
+// ===== LOGIN =====
 client.login(TOKEN);
