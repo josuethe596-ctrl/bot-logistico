@@ -42,13 +42,13 @@ function saveData(data) {
 const commands = [
   new SlashCommandBuilder()
     .setName('agregar')
-    .setDescription('Agregar puntos')
+    .setDescription('Agregar efectividades')
     .addUserOption(o => o.setName('usuario').setDescription('Usuario').setRequired(true))
-    .addIntegerOption(o => o.setName('puntos').setDescription('Cantidad').setRequired(true)),
+    .addIntegerOption(o => o.setName('efectividades').setDescription('Cantidad').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('mep')
-    .setDescription('Ver tus puntos'),
+    .setDescription('Ver tus efectividades'),
 
   new SlashCommandBuilder()
     .setName('diaend')
@@ -91,32 +91,37 @@ client.on('interactionCreate', async interaction => {
       }
 
       const usuario = interaction.options.getUser('usuario');
-      const puntos = interaction.options.getInteger('puntos');
+      const efectividades = interaction.options.getInteger('efectividades');
 
       if (!data[usuario.id]) data[usuario.id] = 0;
 
-      data[usuario.id] += puntos;
+      data[usuario.id] += efectividades;
 
       saveData(data);
 
-      return interaction.reply(`+${puntos} puntos a ${usuario.username}. Total: ${data[usuario.id]}`);
+      return interaction.reply(`+${efectividades} efectividades a ${usuario.username}. Total: ${data[usuario.id]}`);
     }
 
     // ===== MEP =====
     if (interaction.commandName === 'mep') {
-      const puntos = data[userId] || 0;
+      const efectividades = data[userId] || 0;
 
       return interaction.reply({
-        content: `Tienes ${puntos} puntos.`,
+        content: `Tienes ${efectividades} efectividades.`,
         ephemeral: true
       });
     }
 
     // ===== DIAEND =====
     if (interaction.commandName === 'diaend') {
+      const guild = interaction.guild;
       const lista = Object.entries(data)
         .sort((a, b) => b[1] - a[1])
-        .map(([id, puntos]) => `> <@${id}> — ${puntos}`);
+        .map(([id, efectividades]) => {
+          const member = guild.members.cache.get(id);
+          const nombre = member ? member.displayName || member.user.username : 'Usuario desconocido';
+          return `> ${nombre} — ${efectividades} efectividades`;
+        });
 
       return interaction.reply({
         content: `**RANKING DEL DÍA**\n\n${lista.join('\n') || 'Sin datos'}`
