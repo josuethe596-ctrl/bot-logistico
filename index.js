@@ -72,8 +72,12 @@ const commands = [
     .setDescription('Ver terminos y condiciones de TS3'),
 
   new SlashCommandBuilder()
+    .setName('ts3pc')
+    .setDescription('Guia de instalacion TS3 para PC'),
+
+  new SlashCommandBuilder()
     .setName('siacepto')
-    .setDescription('Aceptar terminos y recibir guia de instalacion TS3')
+    .setDescription('Aceptar terminos y recibir guia de instalacion TS3 Android')
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR COMANDOS EN AMBOS SERVIDORES =====
@@ -159,7 +163,7 @@ client.on('interactionCreate', async interaction => {
       const rankingOrdenado = Object.entries(data)
         .sort((a, b) => b[1] - a[1]);
 
-      // ===== RANKING PRINCIPAL - ESTILO LIMPIO VERDE OSCURO =====
+      // ===== RANKING PRINCIPAL =====
       const lineasPrincipal = rankingOrdenado
         .map(([id, efectividades], index) => {
           const member = guildPrincipal?.members.cache.get(id);
@@ -173,15 +177,9 @@ client.on('interactionCreate', async interaction => {
         .setTitle('RANKING DE EFECTIVIDADES')
         .setColor(0x1B4332)
         .setDescription(
-          '```ansi\n' +
-          '\u001b[2;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m\n' +
-          '```' +
-          (lineasPrincipal.length > 0 
-            ? '\n' + lineasPrincipal.join('\n') + '\n' 
-            : '\nSin datos registrados\n') +
-          '```ansi\n' +
-          '\u001b[2;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m\n' +
-          '```'
+          lineasPrincipal.length > 0 
+            ? lineasPrincipal.join('\n') 
+            : 'Sin datos registrados'
         )
         .addFields({
           name: ' ',
@@ -190,25 +188,23 @@ client.on('interactionCreate', async interaction => {
         })
         .setFooter({ text: 'USMC - Sistema de Efectividades' });
 
-      // ===== RANKING STAFF - ESTILO DETALLADO VERDE OSCURO =====
+      // ===== RANKING STAFF =====
       const lineasStaff = rankingOrdenado
         .map(([id, efectividades], index) => {
           const memberPrincipal = guildPrincipal?.members.cache.get(id);
           const memberStaff = guildStaff?.members.cache.get(id);
           const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Usuario desconocido';
-          const username = memberPrincipal?.user.username || 'N/A';
           const tag = memberPrincipal?.user.tag || 'N/A';
           const posicion = (index + 1).toString().padStart(2, '0');
-          const porcentaje = rankingOrdenado.reduce((a, b) => a + b[1], 0) > 0 
-            ? ((efectividades / rankingOrdenado.reduce((a, b) => a + b[1], 0)) * 100).toFixed(1) 
-            : 0;
+          const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
+          const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
           const estado = memberStaff ? 'Sincronizado' : 'No presente';
 
           return `\`#${posicion}\` **${nombre}**\n` +
-                 `\u001b[2;32m│\u001b[0m ID: \`${id}\`\n` +
-                 `\u001b[2;32m│\u001b[0m Usuario: ${tag}\n` +
-                 `\u001b[2;32m│\u001b[0m Efectividades: **${efectividades}** (${porcentaje}%)\n` +
-                 `\u001b[2;32m│\u001b[0m Estado Staff: ${estado}`;
+                 `ID: \`${id}\`\n` +
+                 `Usuario: ${tag}\n` +
+                 `Efectividades: **${efectividades}** (${porcentaje}%)\n` +
+                 `Estado Staff: ${estado}`;
         });
 
       const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
@@ -218,24 +214,18 @@ client.on('interactionCreate', async interaction => {
         .setTitle('RANKING DETALLADO - STAFF')
         .setColor(0x1B4332)
         .setDescription(
-          '```ansi\n' +
-          '\u001b[2;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m\n' +
-          '```' +
-          (lineasStaff.length > 0 
-            ? '\n' + lineasStaff.join('\n\n') + '\n' 
-            : '\nSin datos registrados\n') +
-          '```ansi\n' +
-          '\u001b[2;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m\n' +
-          '```'
+          lineasStaff.length > 0 
+            ? lineasStaff.join('\n\n') 
+            : 'Sin datos registrados'
         )
         .addFields(
           {
             name: 'RESUMEN',
             value: 
-              `\u001b[2;32m▸\u001b[0m Total participantes: **${rankingOrdenado.length}**\n` +
-              `\u001b[2;32m▸\u001b[0m Total efectividades: **${totalEfectividades}**\n` +
-              `\u001b[2;32m▸\u001b[0m Promedio: **${promedio}**\n` +
-              `\u001b[2;32m▸\u001b[0m Ejecutado por: **${interaction.user.tag}**`,
+              `Total participantes: **${rankingOrdenado.length}**\n` +
+              `Total efectividades: **${totalEfectividades}**\n` +
+              `Promedio: **${promedio}**\n` +
+              `Ejecutado por: **${interaction.user.tag}**`,
             inline: false
           }
         )
@@ -306,6 +296,43 @@ client.on('interactionCreate', async interaction => {
         .setFooter({ text: 'USMC - Personal Logistico' });
 
       return interaction.reply({ embeds: [embed] });
+    }
+
+    // ===== TS3 PC =====
+    if (interaction.commandName === 'ts3pc') {
+      const embedDescarga = new EmbedBuilder()
+        .setTitle('Link De Descarga Del TS3 (PC)')
+        .setColor(0x1B4332)
+        .setDescription('https://www.teamspeak.com/en/downloads/#ts3client');
+
+      const embedGuia1 = new EmbedBuilder()
+        .setTitle('Guia 1')
+        .setColor(0x1B4332)
+        .setDescription('Fotos De Guias Para El Proceso De Registro De TS3 (PC).')
+        .setImage('https://images-ext-1.discordapp.net/external/hKs4ua6_y46K-SJdjgSS2beO6PT21-musbkcZCRHPDE/https/cdn.nekotina.com/guilds/1203420760467832923/3bf1e200-4d80-4ad2-acfc-eb7ba57315b0.jpg?format=webp');
+
+      const embedGuia2 = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setImage('https://images-ext-1.discordapp.net/external/C2p2PuAsqPDnkCwLX6CizbYAx8x5_9V-Reex7aAFyxQ/https/cdn.nekotina.com/guilds/1203420760467832923/1ca176e1-a55a-4294-b290-307fbef8c4fc.jpg?format=webp');
+
+      const embedPaso1 = new EmbedBuilder()
+        .setTitle('Paso 1 (Apretar en "Herramientas" >> "Opciones")')
+        .setColor(0x1B4332)
+        .setImage('https://media.discordapp.net/attachments/1481019380103119081/1481021781086306457/TeamSpeak_3_30_09_2025_17_15_54.png?ex=69f8fd84&is=69f7ac04&hm=2909c47dd36047995750173867867b4828bccdfd943d82cafa111b22756b385b&=&format=webp&quality=lossless');
+
+      const embedPaso2 = new EmbedBuilder()
+        .setTitle('Paso 2. (Asignar tecla para hablar)')
+        .setColor(0x1B4332)
+        .setImage('https://media.discordapp.net/attachments/1481019380103119081/1481021815357968427/TeamSpeak_3_30_09_2025_17_17_39.png?ex=69f8fd8c&is=69f7ac0c&hm=31c2d4baf74e2a426f1531662cb3df725573c10b8dda90a8a2733c03ee8beb12&=&format=webp&quality=lossless');
+
+      await interaction.reply({ content: 'Aqui tienes la guia de instalacion de TS3 para PC:' });
+      await interaction.followUp({ embeds: [embedDescarga] });
+      await interaction.followUp({ embeds: [embedGuia1] });
+      await interaction.followUp({ embeds: [embedGuia2] });
+      await interaction.followUp({ embeds: [embedPaso1] });
+      await interaction.followUp({ embeds: [embedPaso2] });
+
+      return;
     }
 
     // ===== SIACEPTO =====
