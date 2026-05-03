@@ -21,15 +21,15 @@ const CANAL_PRINCIPAL = '1500533467166015638';
 const CANAL_STAFF = '1500352253293498561';
 
 // ===== ROLES STAFF =====
-const ROL_STAFF_PRINCIPAL = '1465107741550051369';  // Rol staff en Discord 1 (principal)
-const ROL_STAFF_STAFF = '1489732918124347544';       // Rol staff en Discord 2 (staff)
+const ROL_STAFF_PRINCIPAL = '1465107741550051369';
+const ROL_STAFF_STAFF = '1489732918124347544';
 
 const DATA_FILE = './data.json';
 
 // ===== CREAR JSON SI NO EXISTE =====
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, '{}');
-  console.log('📁 data.json creado automáticamente');
+  console.log('data.json creado automáticamente');
 }
 
 // ===== DATA =====
@@ -37,7 +37,7 @@ function loadData() {
   try {
     return JSON.parse(fs.readFileSync(DATA_FILE));
   } catch {
-    console.log('⚠️ JSON corrupto, reiniciando...');
+    console.log('JSON corrupto, reiniciando...');
     fs.writeFileSync(DATA_FILE, '{}');
     return {};
   }
@@ -69,35 +69,35 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('ts3')
-    .setDescription('Ver términos y condiciones de TS3'),
+    .setDescription('Ver terminos y condiciones de TS3'),
 
   new SlashCommandBuilder()
     .setName('siacepto')
-    .setDescription('Aceptar términos y recibir guía de instalación TS3')
+    .setDescription('Aceptar terminos y recibir guia de instalacion TS3')
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR COMANDOS EN AMBOS SERVIDORES =====
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 client.once('ready', async () => {
-  console.log('✅ Bot iniciado correctamente');
-  console.log('🔄 Registrando comandos...');
+  console.log('Bot iniciado correctamente');
+  console.log('Registrando comandos...');
 
   try {
     await rest.put(
       Routes.applicationGuildCommands(CLIENT_ID, GUILD_PRINCIPAL),
       { body: commands }
     );
-    console.log('✅ Comandos registrados en servidor PRINCIPAL');
+    console.log('Comandos registrados en servidor PRINCIPAL');
 
     await rest.put(
       Routes.applicationGuildCommands(CLIENT_ID, GUILD_STAFF),
       { body: commands }
     );
-    console.log('✅ Comandos registrados en servidor STAFF');
+    console.log('Comandos registrados en servidor STAFF');
 
   } catch (err) {
-    console.error('❌ ERROR REGISTRANDO COMANDOS:', err);
+    console.error('ERROR REGISTRANDO COMANDOS:', err);
   }
 });
 
@@ -113,7 +113,6 @@ client.on('interactionCreate', async interaction => {
     // ===== AGREGAR =====
     if (interaction.commandName === 'agregar') {
 
-      // Verificar rol según el servidor donde se ejecuta
       const rolRequerido = interaction.guildId === GUILD_PRINCIPAL ? ROL_STAFF_PRINCIPAL : ROL_STAFF_STAFF;
 
       if (!interaction.member.roles.cache.has(rolRequerido)) {
@@ -145,7 +144,6 @@ client.on('interactionCreate', async interaction => {
     // ===== DIAEND =====
     if (interaction.commandName === 'diaend') {
 
-      // Verificar rol según el servidor donde se ejecuta
       const rolRequerido = interaction.guildId === GUILD_PRINCIPAL ? ROL_STAFF_PRINCIPAL : ROL_STAFF_STAFF;
 
       if (!interaction.member.roles.cache.has(rolRequerido)) {
@@ -161,49 +159,87 @@ client.on('interactionCreate', async interaction => {
       const rankingOrdenado = Object.entries(data)
         .sort((a, b) => b[1] - a[1]);
 
-      // ===== EMBED PARA SERVIDOR PRINCIPAL =====
-      const listaPrincipal = rankingOrdenado
+      // ===== RANKING PRINCIPAL - ESTILO LIMPIO VERDE OSCURO =====
+      const lineasPrincipal = rankingOrdenado
         .map(([id, efectividades], index) => {
           const member = guildPrincipal?.members.cache.get(id);
           const nombre = member ? member.displayName || member.user.username : 'Usuario desconocido';
-          const medalla = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '•';
-          return `${medalla} **${nombre}** — ${efectividades} efectividades`;
+          const posicion = index + 1;
+          const barra = '▬'.repeat(Math.min(Math.floor(efectividades / 5) + 1, 20));
+          return `\`#${posicion.toString().padStart(2, '0')}\` ┃ **${nombre}** ${barra} ${efectividades}`;
         });
 
       const embedPrincipal = new EmbedBuilder()
-        .setTitle('🏆 RANKING DE EFECTIVIDADES')
-        .setColor(0xFFD700)
-        .setDescription(listaPrincipal.join('\n') || 'Sin datos')
-        .setFooter({ text: `Actualizado por ${interaction.user.username}` })
-        .setTimestamp();
+        .setTitle('RANKING DE EFECTIVIDADES')
+        .setColor(0x1B4332)
+        .setDescription(
+          '```ansi\n' +
+          '\u001b[2;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m\n' +
+          '```' +
+          (lineasPrincipal.length > 0 
+            ? '\n' + lineasPrincipal.join('\n') + '\n' 
+            : '\nSin datos registrados\n') +
+          '```ansi\n' +
+          '\u001b[2;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m\n' +
+          '```'
+        )
+        .addFields({
+          name: ' ',
+          value: `\`Actualizado: ${new Date().toLocaleDateString('es-ES')} | Por: ${interaction.user.username}\``,
+          inline: false
+        })
+        .setFooter({ text: 'USMC - Sistema de Efectividades' });
 
-      // ===== EMBED PARA SERVIDOR STAFF =====
-      const listaStaff = rankingOrdenado
+      // ===== RANKING STAFF - ESTILO DETALLADO VERDE OSCURO =====
+      const lineasStaff = rankingOrdenado
         .map(([id, efectividades], index) => {
           const memberPrincipal = guildPrincipal?.members.cache.get(id);
           const memberStaff = guildStaff?.members.cache.get(id);
           const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Usuario desconocido';
-          const userTag = memberPrincipal?.user.tag || 'N/A#0000';
-          const medalla = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-          const estaEnStaff = memberStaff ? '✅' : '❌';
+          const username = memberPrincipal?.user.username || 'N/A';
+          const tag = memberPrincipal?.user.tag || 'N/A';
+          const posicion = (index + 1).toString().padStart(2, '0');
+          const porcentaje = rankingOrdenado.reduce((a, b) => a + b[1], 0) > 0 
+            ? ((efectividades / rankingOrdenado.reduce((a, b) => a + b[1], 0)) * 100).toFixed(1) 
+            : 0;
+          const estado = memberStaff ? 'Sincronizado' : 'No presente';
 
-          return `${medalla} **${nombre}**\n` +
-                 `├ Usuario: \`${userTag}\`\n` +
-                 `├ ID: \`${id}\`\n` +
-                 `├ Efectividades: **${efectividades}**\n` +
-                 `└ En servidor Staff: ${estaEnStaff}`;
+          return `\`#${posicion}\` **${nombre}**\n` +
+                 `\u001b[2;32m│\u001b[0m ID: \`${id}\`\n` +
+                 `\u001b[2;32m│\u001b[0m Usuario: ${tag}\n` +
+                 `\u001b[2;32m│\u001b[0m Efectividades: **${efectividades}** (${porcentaje}%)\n` +
+                 `\u001b[2;32m│\u001b[0m Estado Staff: ${estado}`;
         });
 
+      const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
+      const promedio = rankingOrdenado.length > 0 ? (totalEfectividades / rankingOrdenado.length).toFixed(1) : 0;
+
       const embedStaff = new EmbedBuilder()
-        .setTitle('🏆 RANKING DETALLADO - STAFF')
-        .setColor(0xFF4500)
-        .setDescription(listaStaff.join('\n\n') || 'Sin datos')
-        .addFields(
-          { name: '📊 Total de participantes', value: `${rankingOrdenado.length}`, inline: true },
-          { name: '🔢 Total de efectividades', value: `${rankingOrdenado.reduce((a, b) => a + b[1], 0)}`, inline: true },
-          { name: '👤 Ejecutado por', value: `${interaction.user.tag}`, inline: true }
+        .setTitle('RANKING DETALLADO - STAFF')
+        .setColor(0x1B4332)
+        .setDescription(
+          '```ansi\n' +
+          '\u001b[2;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m\n' +
+          '```' +
+          (lineasStaff.length > 0 
+            ? '\n' + lineasStaff.join('\n\n') + '\n' 
+            : '\nSin datos registrados\n') +
+          '```ansi\n' +
+          '\u001b[2;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m\n' +
+          '```'
         )
-        .setFooter({ text: 'USMC - Staff Logístico' })
+        .addFields(
+          {
+            name: 'RESUMEN',
+            value: 
+              `\u001b[2;32m▸\u001b[0m Total participantes: **${rankingOrdenado.length}**\n` +
+              `\u001b[2;32m▸\u001b[0m Total efectividades: **${totalEfectividades}**\n` +
+              `\u001b[2;32m▸\u001b[0m Promedio: **${promedio}**\n` +
+              `\u001b[2;32m▸\u001b[0m Ejecutado por: **${interaction.user.tag}**`,
+            inline: false
+          }
+        )
+        .setFooter({ text: 'USMC - Staff Logistico | Informacion confidencial' })
         .setTimestamp();
 
       // Enviar a ambos canales
@@ -221,10 +257,10 @@ client.on('interactionCreate', async interaction => {
       }
 
       const mensajes = [];
-      if (enviadoPrincipal) mensajes.push('✅ Enviado al canal principal');
-      if (enviadoStaff) mensajes.push('✅ Enviado al canal de Staff');
-      if (!enviadoPrincipal) mensajes.push('❌ No se pudo enviar al canal principal');
-      if (!enviadoStaff) mensajes.push('❌ No se pudo enviar al canal de Staff');
+      if (enviadoPrincipal) mensajes.push('Enviado al canal principal');
+      if (enviadoStaff) mensajes.push('Enviado al canal de Staff');
+      if (!enviadoPrincipal) mensajes.push('No se pudo enviar al canal principal');
+      if (!enviadoStaff) mensajes.push('No se pudo enviar al canal de Staff');
 
       return interaction.reply({
         content: mensajes.join('\n'),
@@ -248,7 +284,7 @@ client.on('interactionCreate', async interaction => {
       saveData(data);
 
       return interaction.reply({
-        content: '✅ Todas las efectividades han sido reiniciadas a **0**. ¡Empieza de nuevo!',
+        content: 'Todas las efectividades han sido reiniciadas a 0. Empieza de nuevo.',
         ephemeral: true
       });
     }
@@ -256,18 +292,18 @@ client.on('interactionCreate', async interaction => {
     // ===== TS3 =====
     if (interaction.commandName === 'ts3') {
       const embed = new EmbedBuilder()
-        .setTitle('📋 Términos y Condiciones - TS3')
-        .setColor(0xFF0000)
+        .setTitle('Terminos y Condiciones - TS3')
+        .setColor(0x1B4332)
         .setDescription(
-          'Al aceptar la cuenta de TS3 estás obligado a seguir estos términos y condiciones. Si llegas a romper estos mismos serás vetado de la facción y estarás predispuesto a recibir consecuencias aún mayores.\n\n' +
-          '• No compartir la cuenta a personas ajenas a la facción.\n' +
-          '• Prohibido hacer modificaciones sin previa autorización de los altos mandos logísticos.\n' +
-          '• Cambiar la contraseña de la cuenta de correo electrónico para beneficio propio.\n' +
-          '• Perjudicar de cualquier manera haciendo uso de las herramientas otorgadas por el personal logístico a cualquier miembro de la facción.\n\n' +
-          '**¿Aceptas los términos y condiciones?**\n' +
+          'Al aceptar la cuenta de TS3 estas obligado a seguir estos terminos y condiciones. Si llegas a romper estos mismos seras vetado de la faccion y estaras predispuesto a recibir consecuencias aun mayores.\n\n' +
+          '• No compartir la cuenta a personas ajenas a la faccion.\n' +
+          '• Prohibido hacer modificaciones sin previa autorizacion de los altos mandos logisticos.\n' +
+          '• Cambiar la contrasena de la cuenta de correo electronico para beneficio propio.\n' +
+          '• Perjudicar de cualquier manera haciendo uso de las herramientas otorgadas por el personal logistico a cualquier miembro de la faccion.\n\n' +
+          'Aceptas los terminos y condiciones?\n' +
           'Escribe `/siacepto` para continuar.'
         )
-        .setFooter({ text: 'USMC - Personal Logístico' });
+        .setFooter({ text: 'USMC - Personal Logistico' });
 
       return interaction.reply({ embeds: [embed] });
     }
@@ -275,60 +311,60 @@ client.on('interactionCreate', async interaction => {
     // ===== SIACEPTO =====
     if (interaction.commandName === 'siacepto') {
       const embedInstalacion = new EmbedBuilder()
-        .setTitle('📱 Paso a paso para la instalación del TS3 en Android')
-        .setColor(0x0099FF)
+        .setTitle('Paso a paso para la instalacion del TS3 en Android')
+        .setColor(0x1B4332)
         .setDescription(
-          '**Paso 1.** Selecciona la opción **"continue without logging in"** para iniciar en TS3 sin tener que loguear con tus datos.'
+          'Paso 1. Selecciona la opcion "continue without logging in" para iniciar en TS3 sin tener que loguear con tus datos.'
         )
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029507519840257/IMG-20251112-WA0000.jpg');
 
       const embedPaso2 = new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0x1B4332)
         .setDescription(
-          '**Paso 2.** Busca la opción para añadir un servidor, señalada en la imagen del paso 2.'
+          'Paso 2. Busca la opcion para anadir un servidor, senalada en la imagen del paso 2.'
         )
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029508036001873/IMG-20251112-WA0001.jpg');
 
       const embedPaso3 = new EmbedBuilder()
-        .setColor(0x0099FF)
+        .setColor(0x1B4332)
         .setDescription(
-          '**Paso 3.** Rellena los campos que aparecen en la imagen y sustituye con tus datos.\n\n¡Listo!'
+          'Paso 3. Rellena los campos que aparecen en la imagen y sustituye con tus datos.\n\nListo!'
         )
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029508543512606/IMG-20251112-WA0003.jpg');
 
       const embedConfig = new EmbedBuilder()
-        .setTitle('⚙️ Configuración TS3 Android')
-        .setColor(0xFFA500)
+        .setTitle('Configuracion TS3 Android')
+        .setColor(0x1B4332)
         .setDescription(
-          '**Paso 1.** Dirígete a **ajustes**.'
+          'Paso 1. Dirigete a ajustes.'
         )
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035784434323496/IMG-20251112-WA0004.jpg');
 
       const embedConfig2 = new EmbedBuilder()
-        .setColor(0xFFA500)
+        .setColor(0x1B4332)
         .setDescription(
-          '**Paso 2.** Activa las opciones marcadas en la imagen. **Push to talk**, **superposición de PTT** y **manos libres** te ayudarán a tener una mejor experiencia al utilizar el TS3.'
+          'Paso 2. Activa las opciones marcadas en la imagen. Push to talk, superposicion de PTT y manos libres te ayudaran a tener una mejor experiencia al utilizar el TS3.'
         )
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035784832651394/IMG-20251112-WA0005.jpg');
 
       const embedConfig3 = new EmbedBuilder()
-        .setColor(0xFFA500)
+        .setColor(0x1B4332)
         .setDescription(
-          '**Paso 3.** Desactiva la opción **sensor de proximidad** mostrada en la imagen a continuación.'
+          'Paso 3. Desactiva la opcion sensor de proximidad mostrada en la imagen a continuacion.'
         )
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035785332031529/IMG-20251112-WA0006.jpg');
 
       const embedCuenta = new EmbedBuilder()
-        .setTitle('🔐 Cuenta Junior Enlisted')
-        .setColor(0x00FF00)
+        .setTitle('Cuenta Junior Enlisted')
+        .setColor(0x1B4332)
         .setDescription(
-          '**Correo:**\n`KenwayHaytham005@gmail.com`\n\n' +
-          '**Contraseña:**\n`USMCacceso1`\n\n' +
-          '⚠️ **Recordatorio:** Antes de comenzar a utilizar este beneficio otorgado por la facción, recuerda que aceptas los **términos y condiciones** previamente establecidos. En caso de compartir estos datos con terceros o realizar modificaciones no autorizadas, estarás sujeto a sanciones faccionarias y administrativas graves.'
+          'Correo:\n`KenwayHaytham005@gmail.com`\n\n' +
+          'Contrasena:\n`USMCacceso1`\n\n' +
+          'Recordatorio: Antes de comenzar a utilizar este beneficio otorgado por la faccion, recuerda que aceptas los terminos y condiciones previamente establecidos. En caso de compartir estos datos con terceros o realizar modificaciones no autorizadas, estaras sujeto a sanciones faccionarias y administrativas graves.'
         )
-        .setFooter({ text: 'USMC - Personal Logístico | Uso exclusivo para miembros autorizados' });
+        .setFooter({ text: 'USMC - Personal Logistico | Uso exclusivo para miembros autorizados' });
 
-      await interaction.reply({ content: `✅ **${interaction.user.username}** ha aceptado los términos y condiciones. Aquí tienes la guía completa:` });
+      await interaction.reply({ content: `${interaction.user.username} ha aceptado los terminos y condiciones. Aqui tienes la guia completa:` });
       await interaction.followUp({ embeds: [embedInstalacion] });
       await interaction.followUp({ embeds: [embedPaso2] });
       await interaction.followUp({ embeds: [embedPaso3] });
