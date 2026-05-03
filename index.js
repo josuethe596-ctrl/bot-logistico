@@ -56,6 +56,12 @@ const commands = [
     .addIntegerOption(o => o.setName('efectividades').setDescription('Cantidad').setRequired(true)),
 
   new SlashCommandBuilder()
+    .setName('quitar')
+    .setDescription('Quitar efectividades')
+    .addUserOption(o => o.setName('usuario').setDescription('Usuario').setRequired(true))
+    .addIntegerOption(o => o.setName('efectividades').setDescription('Cantidad').setRequired(true)),
+
+  new SlashCommandBuilder()
     .setName('mep')
     .setDescription('Ver tus efectividades'),
 
@@ -74,10 +80,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName('ts3pc')
     .setDescription('Guia de instalacion TS3 para PC'),
-
-  new SlashCommandBuilder()
-    .setName('android')
-    .setDescription('Macros y archivo monetloader para Android'),
 
   new SlashCommandBuilder()
     .setName('siacepto')
@@ -137,6 +139,29 @@ client.on('interactionCreate', async interaction => {
       saveData(data);
 
       return interaction.reply(`+${efectividades} efectividades a ${usuario.username}. Total: ${data[usuario.id]}`);
+    }
+
+    // ===== QUITAR =====
+    if (interaction.commandName === 'quitar') {
+
+      const rolRequerido = interaction.guildId === GUILD_PRINCIPAL ? ROL_STAFF_PRINCIPAL : ROL_STAFF_STAFF;
+
+      if (!interaction.member.roles.cache.has(rolRequerido)) {
+        return interaction.reply({ content: 'No autorizado.', ephemeral: true });
+      }
+
+      const usuario = interaction.options.getUser('usuario');
+      const efectividades = interaction.options.getInteger('efectividades');
+
+      if (!data[usuario.id]) data[usuario.id] = 0;
+
+      data[usuario.id] -= efectividades;
+
+      if (data[usuario.id] < 0) data[usuario.id] = 0;
+
+      saveData(data);
+
+      return interaction.reply(`-${efectividades} efectividades a ${usuario.username}. Total: ${data[usuario.id]}`);
     }
 
     // ===== MEP =====
@@ -335,63 +360,6 @@ client.on('interactionCreate', async interaction => {
       await interaction.followUp({ embeds: [embedGuia2] });
       await interaction.followUp({ embeds: [embedPaso1] });
       await interaction.followUp({ embeds: [embedPaso2] });
-
-      return;
-    }
-
-    // ===== ANDROID =====
-    if (interaction.commandName === 'android') {
-      const embedInfo = new EmbedBuilder()
-        .setTitle('Macros-android')
-        .setColor(0x1B4332)
-        .setDescription(
-          'A continuacion se te presentan 20 macros diferentes, con roles completos, para cualquier tipo de situaciones en patrullajes.\n\n' +
-          '**Explorador de archivos usado en el video:**\nhttps://play.google.com/store/apps/details?id=ru.zdevs.zarchiver\n\n' +
-          '**Se te presenta el archivo (macros) compatible con cualquier tipo de version de android.**'
-        );
-
-      const embedNota1 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Nota 1')
-        .setDescription(
-          'Una vez aplicado el mas macros activar el apartado: **(Monetloader)** tener activado antes de descargar y colocar dicho archivo.'
-        );
-
-      const embedNota2 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Nota 2')
-        .setDescription(
-          'Antes de colocar dichas macros asegurarse de no tener otro archivo monetloader en uso, pues este archivo contiene para poder crashear el APK para evitar el uso de cheats o ventajas que te de otro archivo monetloader.'
-        );
-
-      const embedNota3 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Nota 3')
-        .setDescription(
-          'Para agregar macros puedes usar el comando `/cmdhm` y con este mismo se habren dicho apartados para agregar hasta **45 tipos de macros diferentes**.'
-        );
-
-      const embedNota4 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Nota 4')
-        .setDescription(
-          'Las macros o el archivo monetloader ya tiene un sistema de renderizado, FOV y el aspect ratio. Este ultimo sirve para estirar la pantalla, no se recomienda estirar mucho ya que se bajaran tus posibilidades de abrir fuegos contra ciudadanos en dicho caso.'
-        );
-
-      await interaction.reply({ content: 'Aqui tienes la informacion de macros para Android:' });
-      await interaction.followUp({ embeds: [embedInfo] });
-      await interaction.followUp({ embeds: [embedNota1] });
-      await interaction.followUp({ embeds: [embedNota2] });
-      await interaction.followUp({ embeds: [embedNota3] });
-      await interaction.followUp({ embeds: [embedNota4] });
-      await interaction.followUp({
-        content: '**Video tutorial:**',
-        files: ['https://cdn.discordapp.com/attachments/1479296105819803799/1479302677275082924/screen-20260305-210418.mp4?ex=69f8ab3a&is=69f759ba&hm=52d7641d14c10066ebaa658137bdd5155bc4e3c7ac9ac106bfb6cbc9d2906d96&']
-      });
-      await interaction.followUp({
-        content: '**Archivo monetloader.7z:**',
-        files: ['https://cdn.discordapp.com/attachments/1479296105819803799/1479302678096908471/monetloader.7z?ex=69f8ab3a&is=69f759ba&hm=c5f6f50de71f61443210794fcc061fc4c9651968f270221da57c0cb1c5e37a88&']
-      });
 
       return;
     }
