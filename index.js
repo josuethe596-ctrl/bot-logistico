@@ -20,7 +20,9 @@ const GUILD_STAFF = '1464318287683780836';
 const CANAL_PRINCIPAL = '1500533467166015638';
 const CANAL_STAFF = '1500352253293498561';
 
-const ROL_STAFF = '1489732918124347544';
+// ===== ROLES STAFF =====
+const ROL_STAFF_PRINCIPAL = '1465107741550051369';  // Rol staff en Discord 1 (principal)
+const ROL_STAFF_STAFF = '1489732918124347544';       // Rol staff en Discord 2 (staff)
 
 const DATA_FILE = './data.json';
 
@@ -45,7 +47,7 @@ function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// ===== COMANDOS (registrados en ambos servidores) =====
+// ===== COMANDOS =====
 const commands = [
   new SlashCommandBuilder()
     .setName('agregar')
@@ -82,14 +84,12 @@ client.once('ready', async () => {
   console.log('🔄 Registrando comandos...');
 
   try {
-    // Registrar en servidor principal
     await rest.put(
       Routes.applicationGuildCommands(CLIENT_ID, GUILD_PRINCIPAL),
       { body: commands }
     );
     console.log('✅ Comandos registrados en servidor PRINCIPAL');
 
-    // Registrar en servidor staff
     await rest.put(
       Routes.applicationGuildCommands(CLIENT_ID, GUILD_STAFF),
       { body: commands }
@@ -113,7 +113,10 @@ client.on('interactionCreate', async interaction => {
     // ===== AGREGAR =====
     if (interaction.commandName === 'agregar') {
 
-      if (!interaction.member.roles.cache.has(ROL_STAFF)) {
+      // Verificar rol según el servidor donde se ejecuta
+      const rolRequerido = interaction.guildId === GUILD_PRINCIPAL ? ROL_STAFF_PRINCIPAL : ROL_STAFF_STAFF;
+
+      if (!interaction.member.roles.cache.has(rolRequerido)) {
         return interaction.reply({ content: 'No autorizado.', ephemeral: true });
       }
 
@@ -142,8 +145,10 @@ client.on('interactionCreate', async interaction => {
     // ===== DIAEND =====
     if (interaction.commandName === 'diaend') {
 
-      // Solo staff puede usarlo
-      if (!interaction.member.roles.cache.has(ROL_STAFF)) {
+      // Verificar rol según el servidor donde se ejecuta
+      const rolRequerido = interaction.guildId === GUILD_PRINCIPAL ? ROL_STAFF_PRINCIPAL : ROL_STAFF_STAFF;
+
+      if (!interaction.member.roles.cache.has(rolRequerido)) {
         return interaction.reply({ content: 'No autorizado.', ephemeral: true });
       }
 
@@ -153,11 +158,10 @@ client.on('interactionCreate', async interaction => {
       const canalPrincipal = guildPrincipal?.channels.cache.get(CANAL_PRINCIPAL);
       const canalStaff = guildStaff?.channels.cache.get(CANAL_STAFF);
 
-      // Preparar ranking ordenado
       const rankingOrdenado = Object.entries(data)
         .sort((a, b) => b[1] - a[1]);
 
-      // ===== EMBED PARA SERVIDOR PRINCIPAL (vista simple) =====
+      // ===== EMBED PARA SERVIDOR PRINCIPAL =====
       const listaPrincipal = rankingOrdenado
         .map(([id, efectividades], index) => {
           const member = guildPrincipal?.members.cache.get(id);
@@ -173,13 +177,12 @@ client.on('interactionCreate', async interaction => {
         .setFooter({ text: `Actualizado por ${interaction.user.username}` })
         .setTimestamp();
 
-      // ===== EMBED PARA SERVIDOR STAFF (vista detallada) =====
+      // ===== EMBED PARA SERVIDOR STAFF =====
       const listaStaff = rankingOrdenado
         .map(([id, efectividades], index) => {
           const memberPrincipal = guildPrincipal?.members.cache.get(id);
           const memberStaff = guildStaff?.members.cache.get(id);
           const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Usuario desconocido';
-          const username = memberPrincipal?.user.username || 'N/A';
           const userTag = memberPrincipal?.user.tag || 'N/A#0000';
           const medalla = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
           const estaEnStaff = memberStaff ? '✅' : '❌';
@@ -217,7 +220,6 @@ client.on('interactionCreate', async interaction => {
         enviadoStaff = true;
       }
 
-      // Responder al staff que ejecutó el comando
       const mensajes = [];
       if (enviadoPrincipal) mensajes.push('✅ Enviado al canal principal');
       if (enviadoStaff) mensajes.push('✅ Enviado al canal de Staff');
@@ -233,7 +235,9 @@ client.on('interactionCreate', async interaction => {
     // ===== RESETS =====
     if (interaction.commandName === 'resets') {
 
-      if (!interaction.member.roles.cache.has(ROL_STAFF)) {
+      const rolRequerido = interaction.guildId === GUILD_PRINCIPAL ? ROL_STAFF_PRINCIPAL : ROL_STAFF_STAFF;
+
+      if (!interaction.member.roles.cache.has(rolRequerido)) {
         return interaction.reply({ content: 'No autorizado.', ephemeral: true });
       }
 
