@@ -21,14 +21,9 @@ const CANAL_PRINCIPAL = '1500533467166015638';
 const CANAL_STAFF = '1500352253293498561';
 
 // ===== ROLES POR PERMISO =====
-
-// /agregar /quitar /diaend /resets
-const ROLES_ADMIN_PRINCIPAL = ['1249089576270696508', '1249089640632422470'];
-const ROLES_ADMIN_STAFF = ['1467236078007353487'];
-
-// /ts3 /ts3pc
-const ROLES_TS3_PRINCIPAL = ['1249095569150836781'];
-const ROLES_TS3_STAFF = ['1467236084445614223'];
+const ROLES_STAFF = ['1249089576270696508', '1249089640632422470'];
+const ROL_USUARIO = '1249089172308885576';
+const ROL_ESPECIAL = '1249095569150836781';
 
 const DATA_FILE = './data.json';
 
@@ -58,46 +53,145 @@ function tieneAlgunRol(member, rolesArray) {
   return rolesArray.some(rolId => member.roles.cache.has(rolId));
 }
 
+// ===== FUNCION PARA ENVIAR TABLERO AUTOMATICO =====
+async function enviarTableroAutomatico() {
+  const data = loadData();
+  
+  const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
+  const guildStaff = client.guilds.cache.get(GUILD_STAFF);
+  
+  const canalPrincipal = guildPrincipal?.channels.cache.get(CANAL_PRINCIPAL);
+  const canalStaff = guildStaff?.channels.cache.get(CANAL_STAFF);
+  
+  if (!canalPrincipal || !canalStaff) {
+    console.log('Canales no disponibles para envio automatico');
+    return;
+  }
+
+  const rankingOrdenado = Object.entries(data).sort((a, b) => b[1] - a[1]);
+
+  // ===== TABLERO PRINCIPAL =====
+  const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
+    const member = guildPrincipal?.members.cache.get(id);
+    const nombre = member ? member.displayName || member.user.username : 'Desconocido';
+    const posicion = (index + 1).toString().padStart(2, '0');
+    const barra = '■'.repeat(Math.min(Math.floor(efectividades / 5) + 1, 20));
+    return `[${posicion}] ${nombre} ${barra} ${efectividades}`;
+  });
+
+  const embedPrincipal = new EmbedBuilder()
+    .setColor(0x1B4332)
+    .setTitle('DIA FINALIZADO - TABLERO DE EFECTIVIDADES')
+    .setDescription(lineasPrincipal.join('\n') || 'Sin registros disponibles')
+    .addFields({
+      name: 'Informacion del sistema',
+      value: `Fecha: ${new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York' })} | Hora: 00:00 EST | Modo: Automatico`
+    })
+    .setFooter({ text: 'USMC - Sistema automatizado de cierre diario' });
+
+  // ===== TABLERO STAFF =====
+  const lineasStaff = rankingOrdenado.map(([id, efectividades], index) => {
+    const memberPrincipal = guildPrincipal?.members.cache.get(id);
+    const memberStaff = guildStaff?.members.cache.get(id);
+    const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Desconocido';
+    const tag = memberPrincipal?.user.tag || 'N/A';
+    const posicion = (index + 1).toString().padStart(2, '0');
+    const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
+    const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
+    const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
+
+    return `[${posicion}] ${nombre}\n` +
+           `Identificador: ${id}\n` +
+           `Cuenta: ${tag}\n` +
+           `Efectividades: ${efectividades} (${porcentaje}%)\n` +
+           `Sincronizacion: ${sincronizacion}`;
+  });
+
+  const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
+  const promedio = rankingOrdenado.length > 0 ? (totalEfectividades / rankingOrdenado.length).toFixed(1) : 0;
+
+  const embedStaff = new EmbedBuilder()
+    .setColor(0x1B4332)
+    .setTitle('DIA FINALIZADO - TABLERO DETALLADO STAFF')
+    .setDescription(lineasStaff.join('\n\n') || 'Sin registros disponibles')
+    .addFields({
+      name: 'Resumen Ejecutivo',
+      value: 
+        `Participantes: ${rankingOrdenado.length}\n` +
+        `Total acumulado: ${totalEfectividades}\n` +
+        `Promedio general: ${promedio}\n` +
+        `Cierre automatico: 00:00 EST`
+    })
+    .setTimestamp()
+    .setFooter({ text: 'USMC - Staff Logistico | Informacion confidencial' });
+
+  await canalPrincipal.send({ embeds: [embedPrincipal] });
+  await canalStaff.send({ embeds: [embedStaff] });
+  
+  console.log(`Tablero automatico enviado: ${new Date().toLocaleString('es-ES', { timeZone: 'America/New_York' })} EST`);
+}
+
+// ===== SISTEMA DE HORARIO AUTOMATICO =====
+function iniciarHorarioAutomatico() {
+  // Verificar cada minuto
+  setInterval(() => {
+    const ahora = new Date();
+    const opciones = { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false };
+    const horaNY = ahora.toLocaleString('en-US', opciones);
+    
+    // 00:00 = medianoche
+    if (horaNY === '00:00') {
+      enviarTableroAutomatico();
+    }
+  }, 60000); // 60000ms = 1 minuto
+  
+  console.log('Sistema de horario automatico activado. Verificando hora NY cada minuto.');
+}
+
 // ===== COMANDOS =====
 const commands = [
   new SlashCommandBuilder()
     .setName('agregar')
-    .setDescription('Agregar efectividades')
-    .addUserOption(o => o.setName('usuario').setDescription('Usuario').setRequired(true))
-    .addIntegerOption(o => o.setName('efectividades').setDescription('Cantidad').setRequired(true)),
+    .setDescription('Agregar efectividades a un usuario')
+    .addUserOption(o => o.setName('usuario').setDescription('Usuario objetivo').setRequired(true))
+    .addIntegerOption(o => o.setName('cantidad').setDescription('Cantidad a agregar').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('quitar')
-    .setDescription('Quitar efectividades')
-    .addUserOption(o => o.setName('usuario').setDescription('Usuario').setRequired(true))
-    .addIntegerOption(o => o.setName('efectividades').setDescription('Cantidad').setRequired(true)),
+    .setDescription('Quitar efectividades a un usuario')
+    .addUserOption(o => o.setName('usuario').setDescription('Usuario objetivo').setRequired(true))
+    .addIntegerOption(o => o.setName('cantidad').setDescription('Cantidad a quitar').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('mep')
-    .setDescription('Ver tus efectividades'),
+    .setDescription('Consultar tus efectividades actuales'),
 
   new SlashCommandBuilder()
-    .setName('diaend')
-    .setDescription('Ver ranking (Solo Admin)'),
+    .setName('tablero')
+    .setDescription('Publicar ranking en canales designados'),
 
   new SlashCommandBuilder()
     .setName('resets')
-    .setDescription('Reiniciar todas las efectividades a 0 (Solo Admin)'),
+    .setDescription('Reiniciar todas las efectividades a cero'),
 
   new SlashCommandBuilder()
     .setName('ts3')
-    .setDescription('Ver terminos y condiciones de TS3'),
+    .setDescription('Terminos y condiciones de TS3'),
 
   new SlashCommandBuilder()
     .setName('ts3pc')
     .setDescription('Guia de instalacion TS3 para PC'),
 
   new SlashCommandBuilder()
+    .setName('android')
+    .setDescription('Macros y archivo monetloader para Android'),
+
+  new SlashCommandBuilder()
     .setName('siacepto')
-    .setDescription('Aceptar terminos y recibir guia de instalacion TS3 Android')
+    .setDescription('Aceptar terminos y recibir guia TS3 Android')
 ].map(c => c.toJSON());
 
-// ===== REGISTRAR COMANDOS EN AMBOS SERVIDORES =====
+// ===== REGISTRAR COMANDOS =====
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 client.once('ready', async () => {
@@ -105,17 +199,14 @@ client.once('ready', async () => {
   console.log('Registrando comandos...');
 
   try {
-    await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_PRINCIPAL),
-      { body: commands }
-    );
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_PRINCIPAL), { body: commands });
     console.log('Comandos registrados en servidor PRINCIPAL');
 
-    await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_STAFF),
-      { body: commands }
-    );
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_STAFF), { body: commands });
     console.log('Comandos registrados en servidor STAFF');
+
+    // Iniciar sistema automatico despues de que el bot este listo
+    iniciarHorarioAutomatico();
 
   } catch (err) {
     console.error('ERROR REGISTRANDO COMANDOS:', err);
@@ -133,65 +224,73 @@ client.on('interactionCreate', async interaction => {
 
     // ===== AGREGAR =====
     if (interaction.commandName === 'agregar') {
-
-      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_ADMIN_PRINCIPAL : ROLES_ADMIN_STAFF;
-
-      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
-        return interaction.reply({ content: 'No autorizado. Requiere rol de administrador.', ephemeral: true });
+      if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
       const usuario = interaction.options.getUser('usuario');
-      const efectividades = interaction.options.getInteger('efectividades');
+      const cantidad = interaction.options.getInteger('cantidad');
+
+      if (cantidad <= 0) {
+        return interaction.reply({ content: 'La cantidad debe ser mayor a cero.', ephemeral: true });
+      }
 
       if (!data[usuario.id]) data[usuario.id] = 0;
-
-      data[usuario.id] += efectividades;
-
+      data[usuario.id] += cantidad;
       saveData(data);
 
-      return interaction.reply(`+${efectividades} efectividades a ${usuario.username}. Total: ${data[usuario.id]}`);
+      const embed = new EmbedBuilder()
+        .setColor(0x2D5A3D)
+        .setDescription(`Operacion completada. Se agregaron ${cantidad} unidades a ${usuario.username}. Balance actual: ${data[usuario.id]}`);
+
+      return interaction.reply({ embeds: [embed] });
     }
 
     // ===== QUITAR =====
     if (interaction.commandName === 'quitar') {
-
-      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_ADMIN_PRINCIPAL : ROLES_ADMIN_STAFF;
-
-      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
-        return interaction.reply({ content: 'No autorizado. Requiere rol de administrador.', ephemeral: true });
+      if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
       const usuario = interaction.options.getUser('usuario');
-      const efectividades = interaction.options.getInteger('efectividades');
+      const cantidad = interaction.options.getInteger('cantidad');
+
+      if (cantidad <= 0) {
+        return interaction.reply({ content: 'La cantidad debe ser mayor a cero.', ephemeral: true });
+      }
 
       if (!data[usuario.id]) data[usuario.id] = 0;
-
-      data[usuario.id] -= efectividades;
-
+      data[usuario.id] -= cantidad;
       if (data[usuario.id] < 0) data[usuario.id] = 0;
-
       saveData(data);
 
-      return interaction.reply(`-${efectividades} efectividades a ${usuario.username}. Total: ${data[usuario.id]}`);
+      const embed = new EmbedBuilder()
+        .setColor(0x2D5A3D)
+        .setDescription(`Operacion completada. Se retiraron ${cantidad} unidades a ${usuario.username}. Balance actual: ${data[usuario.id]}`);
+
+      return interaction.reply({ embeds: [embed] });
     }
 
     // ===== MEP =====
     if (interaction.commandName === 'mep') {
+      if (!interaction.member.roles.cache.has(ROL_USUARIO)) {
+        return interaction.reply({ content: 'No tienes permiso para usar este comando.', ephemeral: true });
+      }
+
       const efectividades = data[userId] || 0;
 
-      return interaction.reply({
-        content: `Tienes ${efectividades} efectividades.`,
-        ephemeral: true
-      });
+      const embed = new EmbedBuilder()
+        .setColor(0x2D5A3D)
+        .setTitle('Consulta de Balance')
+        .setDescription(`Usuario: ${interaction.user.username}\nBalance actual: ${efectividades} efectividades`);
+
+      return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
-    // ===== DIAEND =====
-    if (interaction.commandName === 'diaend') {
-
-      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_ADMIN_PRINCIPAL : ROLES_ADMIN_STAFF;
-
-      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
-        return interaction.reply({ content: 'No autorizado. Requiere rol de administrador.', ephemeral: true });
+    // ===== TABLERO =====
+    if (interaction.commandName === 'tablero') {
+      if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
       const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
@@ -200,79 +299,59 @@ client.on('interactionCreate', async interaction => {
       const canalPrincipal = guildPrincipal?.channels.cache.get(CANAL_PRINCIPAL);
       const canalStaff = guildStaff?.channels.cache.get(CANAL_STAFF);
 
-      const rankingOrdenado = Object.entries(data)
-        .sort((a, b) => b[1] - a[1]);
+      const rankingOrdenado = Object.entries(data).sort((a, b) => b[1] - a[1]);
 
-      // ===== RANKING PRINCIPAL =====
-      const lineasPrincipal = rankingOrdenado
-        .map(([id, efectividades], index) => {
-          const member = guildPrincipal?.members.cache.get(id);
-          const nombre = member ? member.displayName || member.user.username : 'Usuario desconocido';
-          const posicion = index + 1;
-          const barra = '▬'.repeat(Math.min(Math.floor(efectividades / 5) + 1, 20));
-          return `\`#${posicion.toString().padStart(2, '0')}\` ┃ **${nombre}** ${barra} ${efectividades}`;
-        });
+      const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
+        const member = guildPrincipal?.members.cache.get(id);
+        const nombre = member ? member.displayName || member.user.username : 'Desconocido';
+        const posicion = (index + 1).toString().padStart(2, '0');
+        const barra = '■'.repeat(Math.min(Math.floor(efectividades / 5) + 1, 20));
+        return `[${posicion}] ${nombre} ${barra} ${efectividades}`;
+      });
 
       const embedPrincipal = new EmbedBuilder()
-        .setTitle('RANKING DE EFECTIVIDADES')
         .setColor(0x1B4332)
-        .setDescription(
-          lineasPrincipal.length > 0 
-            ? lineasPrincipal.join('\n') 
-            : 'Sin datos registrados'
-        )
+        .setTitle('TABLERO DE EFECTIVIDADES')
+        .setDescription(lineasPrincipal.join('\n') || 'Sin registros disponibles')
         .addFields({
-          name: ' ',
-          value: `\`Actualizado: ${new Date().toLocaleDateString('es-ES')} | Por: ${interaction.user.username}\``,
-          inline: false
-        })
-        .setFooter({ text: 'USMC - Sistema de Efectividades' });
-
-      // ===== RANKING STAFF =====
-      const lineasStaff = rankingOrdenado
-        .map(([id, efectividades], index) => {
-          const memberPrincipal = guildPrincipal?.members.cache.get(id);
-          const memberStaff = guildStaff?.members.cache.get(id);
-          const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Usuario desconocido';
-          const tag = memberPrincipal?.user.tag || 'N/A';
-          const posicion = (index + 1).toString().padStart(2, '0');
-          const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
-          const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
-          const estado = memberStaff ? 'Sincronizado' : 'No presente';
-
-          return `\`#${posicion}\` **${nombre}**\n` +
-                 `ID: \`${id}\`\n` +
-                 `Usuario: ${tag}\n` +
-                 `Efectividades: **${efectividades}** (${porcentaje}%)\n` +
-                 `Estado Staff: ${estado}`;
+          name: 'Informacion',
+          value: `Actualizado: ${new Date().toLocaleDateString('es-ES')} | Responsable: ${interaction.user.username}`
         });
+
+      const lineasStaff = rankingOrdenado.map(([id, efectividades], index) => {
+        const memberPrincipal = guildPrincipal?.members.cache.get(id);
+        const memberStaff = guildStaff?.members.cache.get(id);
+        const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Desconocido';
+        const tag = memberPrincipal?.user.tag || 'N/A';
+        const posicion = (index + 1).toString().padStart(2, '0');
+        const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
+        const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
+        const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
+
+        return `[${posicion}] ${nombre}\n` +
+               `Identificador: ${id}\n` +
+               `Cuenta: ${tag}\n` +
+               `Efectividades: ${efectividades} (${porcentaje}%)\n` +
+               `Sincronizacion: ${sincronizacion}`;
+      });
 
       const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
       const promedio = rankingOrdenado.length > 0 ? (totalEfectividades / rankingOrdenado.length).toFixed(1) : 0;
 
       const embedStaff = new EmbedBuilder()
-        .setTitle('RANKING DETALLADO - STAFF')
         .setColor(0x1B4332)
-        .setDescription(
-          lineasStaff.length > 0 
-            ? lineasStaff.join('\n\n') 
-            : 'Sin datos registrados'
-        )
-        .addFields(
-          {
-            name: 'RESUMEN',
-            value: 
-              `Total participantes: **${rankingOrdenado.length}**\n` +
-              `Total efectividades: **${totalEfectividades}**\n` +
-              `Promedio: **${promedio}**\n` +
-              `Ejecutado por: **${interaction.user.tag}**`,
-            inline: false
-          }
-        )
-        .setFooter({ text: 'USMC - Staff Logistico | Informacion confidencial' })
+        .setTitle('TABLERO DETALLADO - STAFF')
+        .setDescription(lineasStaff.join('\n\n') || 'Sin registros disponibles')
+        .addFields({
+          name: 'Resumen Ejecutivo',
+          value: 
+            `Participantes: ${rankingOrdenado.length}\n` +
+            `Total acumulado: ${totalEfectividades}\n` +
+            `Promedio general: ${promedio}\n` +
+            `Generado por: ${interaction.user.tag}`
+        })
         .setTimestamp();
 
-      // Enviar a ambos canales
       let enviadoPrincipal = false;
       let enviadoStaff = false;
 
@@ -287,24 +366,22 @@ client.on('interactionCreate', async interaction => {
       }
 
       const mensajes = [];
-      if (enviadoPrincipal) mensajes.push('Enviado al canal principal');
-      if (enviadoStaff) mensajes.push('Enviado al canal de Staff');
-      if (!enviadoPrincipal) mensajes.push('No se pudo enviar al canal principal');
-      if (!enviadoStaff) mensajes.push('No se pudo enviar al canal de Staff');
+      if (enviadoPrincipal) mensajes.push('Tablero publicado en canal principal');
+      if (enviadoStaff) mensajes.push('Tablero publicado en canal de Staff');
+      if (!enviadoPrincipal) mensajes.push('Fallo al publicar en canal principal');
+      if (!enviadoStaff) mensajes.push('Fallo al publicar en canal de Staff');
 
-      return interaction.reply({
-        content: mensajes.join('\n'),
-        ephemeral: true
-      });
+      const embedConfirmacion = new EmbedBuilder()
+        .setColor(0x2D5A3D)
+        .setDescription(mensajes.join('\n'));
+
+      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
     }
 
     // ===== RESETS =====
     if (interaction.commandName === 'resets') {
-
-      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_ADMIN_PRINCIPAL : ROLES_ADMIN_STAFF;
-
-      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
-        return interaction.reply({ content: 'No autorizado. Requiere rol de administrador.', ephemeral: true });
+      if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
       for (const id in data) {
@@ -313,74 +390,68 @@ client.on('interactionCreate', async interaction => {
 
       saveData(data);
 
-      return interaction.reply({
-        content: 'Todas las efectividades han sido reiniciadas a 0. Empieza de nuevo.',
-        ephemeral: true
-      });
+      const embed = new EmbedBuilder()
+        .setColor(0x2D5A3D)
+        .setTitle('Reinicio Completado')
+        .setDescription('Todos los registros han sido restablecidos a cero. El sistema esta listo para nueva acumulacion.');
+
+      return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
     // ===== TS3 =====
     if (interaction.commandName === 'ts3') {
-
-      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_TS3_PRINCIPAL : ROLES_TS3_STAFF;
-
-      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
-        return interaction.reply({ content: 'No autorizado. Requiere rol de TS3.', ephemeral: true });
+      if (!interaction.member.roles.cache.has(ROL_ESPECIAL)) {
+        return interaction.reply({ content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
       }
 
       const embed = new EmbedBuilder()
-        .setTitle('Terminos y Condiciones - TS3')
         .setColor(0x1B4332)
+        .setTitle('Terminos y Condiciones - TS3')
         .setDescription(
-          'Al aceptar la cuenta de TS3 estas obligado a seguir estos terminos y condiciones. Si llegas a romper estos mismos seras vetado de la faccion y estaras predispuesto a recibir consecuencias aun mayores.\n\n' +
-          '• No compartir la cuenta a personas ajenas a la faccion.\n' +
-          '• Prohibido hacer modificaciones sin previa autorizacion de los altos mandos logisticos.\n' +
-          '• Cambiar la contrasena de la cuenta de correo electronico para beneficio propio.\n' +
-          '• Perjudicar de cualquier manera haciendo uso de las herramientas otorgadas por el personal logistico a cualquier miembro de la faccion.\n\n' +
-          'Aceptas los terminos y condiciones?\n' +
-          'Escribe `/siacepto` para continuar.'
-        )
-        .setFooter({ text: 'USMC - Personal Logistico' });
+          'Al aceptar la cuenta de TS3 estas obligado a seguir estos terminos y condiciones. El incumplimiento resultara en veto de la faccion y posibles sanciones adicionales.\n\n' +
+          'Restricciones:\n' +
+          '- No compartir la cuenta con personas externas a la faccion\n' +
+          '- No realizar modificaciones sin autorizacion de alto mando logistico\n' +
+          '- No cambiar la contrasena del correo asociado para beneficio propio\n' +
+          '- No utilizar las herramientas para perjudicar a miembros de la faccion\n\n' +
+          'Para continuar escribe /siacepto'
+        );
 
       return interaction.reply({ embeds: [embed] });
     }
 
     // ===== TS3 PC =====
     if (interaction.commandName === 'ts3pc') {
-
-      const rolesPermitidos = interaction.guildId === GUILD_PRINCIPAL ? ROLES_TS3_PRINCIPAL : ROLES_TS3_STAFF;
-
-      if (!tieneAlgunRol(interaction.member, rolesPermitidos)) {
-        return interaction.reply({ content: 'No autorizado. Requiere rol de TS3.', ephemeral: true });
+      if (!interaction.member.roles.cache.has(ROL_ESPECIAL)) {
+        return interaction.reply({ content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
       }
 
       const embedDescarga = new EmbedBuilder()
-        .setTitle('Link De Descarga Del TS3 (PC)')
         .setColor(0x1B4332)
+        .setTitle('Descarga de TS3 para PC')
         .setDescription('https://www.teamspeak.com/en/downloads/#ts3client');
 
       const embedGuia1 = new EmbedBuilder()
-        .setTitle('Guia 1')
         .setColor(0x1B4332)
-        .setDescription('Fotos De Guias Para El Proceso De Registro De TS3 (PC).')
+        .setTitle('Proceso de Registro - Imagen 1')
         .setImage('https://images-ext-1.discordapp.net/external/hKs4ua6_y46K-SJdjgSS2beO6PT21-musbkcZCRHPDE/https/cdn.nekotina.com/guilds/1203420760467832923/3bf1e200-4d80-4ad2-acfc-eb7ba57315b0.jpg?format=webp');
 
       const embedGuia2 = new EmbedBuilder()
         .setColor(0x1B4332)
+        .setTitle('Proceso de Registro - Imagen 2')
         .setImage('https://images-ext-1.discordapp.net/external/C2p2PuAsqPDnkCwLX6CizbYAx8x5_9V-Reex7aAFyxQ/https/cdn.nekotina.com/guilds/1203420760467832923/1ca176e1-a55a-4294-b290-307fbef8c4fc.jpg?format=webp');
 
       const embedPaso1 = new EmbedBuilder()
-        .setTitle('Paso 1 (Apretar en "Herramientas" >> "Opciones")')
         .setColor(0x1B4332)
+        .setTitle('Configuracion: Herramientas > Opciones')
         .setImage('https://media.discordapp.net/attachments/1481019380103119081/1481021781086306457/TeamSpeak_3_30_09_2025_17_15_54.png?ex=69f8fd84&is=69f7ac04&hm=2909c47dd36047995750173867867b4828bccdfd943d82cafa111b22756b385b&=&format=webp&quality=lossless');
 
       const embedPaso2 = new EmbedBuilder()
-        .setTitle('Paso 2. (Asignar tecla para hablar)')
         .setColor(0x1B4332)
+        .setTitle('Configuracion: Asignar tecla para hablar')
         .setImage('https://media.discordapp.net/attachments/1481019380103119081/1481021815357968427/TeamSpeak_3_30_09_2025_17_17_39.png?ex=69f8fd8c&is=69f7ac0c&hm=31c2d4baf74e2a426f1531662cb3df725573c10b8dda90a8a2733c03ee8beb12&=&format=webp&quality=lossless');
 
-      await interaction.reply({ content: 'Aqui tienes la guia de instalacion de TS3 para PC:' });
-      await interaction.followUp({ embeds: [embedDescarga] });
+      await interaction.reply({ content: 'Guia de instalacion TS3 para PC:', embeds: [embedDescarga] });
       await interaction.followUp({ embeds: [embedGuia1] });
       await interaction.followUp({ embeds: [embedGuia2] });
       await interaction.followUp({ embeds: [embedPaso1] });
@@ -389,63 +460,113 @@ client.on('interactionCreate', async interaction => {
       return;
     }
 
+    // ===== ANDROID =====
+    if (interaction.commandName === 'android') {
+      if (!interaction.member.roles.cache.has(ROL_ESPECIAL)) {
+        return interaction.reply({ content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
+      }
+
+      const embedIntro = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setTitle('Macros para Android')
+        .setDescription(
+          'Se presentan 20 macros con roles completos para situaciones de patrullaje.\n\n' +
+          'Explorador recomendado: https://play.google.com/store/apps/details?id=ru.zdevs.zarchiver\n\n' +
+          'Archivo compatible con todas las versiones de Android.'
+        );
+
+      const embedNota1 = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setTitle('Nota 1 - Activacion de Monetloader')
+        .setDescription('Una vez aplicadas las macros, activar el apartado Monetloader antes de descargar y colocar el archivo.');
+
+      const embedNota2 = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setTitle('Nota 2 - Limpieza previa')
+        .setDescription('Asegurarse de no tener otro archivo monetloader en uso. Este archivo incluye proteccion contra cheats y ventajas externas.');
+
+      const embedNota3 = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setTitle('Nota 3 - Expansion de macros')
+        .setDescription('Usar /cmdhm para acceder al menu de expansion. Permite agregar hasta 45 tipos de macros diferentes.');
+
+      const embedNota4 = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setTitle('Nota 4 - Configuracion grafica')
+        .setDescription(
+          'El archivo incluye sistema de renderizado, FOV y aspect ratio.\n' +
+          'El aspect ratio estira la pantalla. No recomendado exceder el estiramiento, ya que reduce la precision al abrir fuego contra objetivos.'
+        );
+
+      await interaction.reply({ content: 'Paquete de macros para Android:', embeds: [embedIntro] });
+      await interaction.followUp({ embeds: [embedNota1] });
+      await interaction.followUp({ embeds: [embedNota2] });
+      await interaction.followUp({ embeds: [embedNota3] });
+      await interaction.followUp({ embeds: [embedNota4] });
+      await interaction.followUp({
+        content: 'Video tutorial:',
+        files: ['https://cdn.discordapp.com/attachments/1479296105819803799/1479302677275082924/screen-20260305-210418.mp4?ex=69f8ab3a&is=69f759ba&hm=52d7641d14c10066ebaa658137bdd5155bc4e3c7ac9ac106bfb6cbc9d2906d96&']
+      });
+      await interaction.followUp({
+        content: 'Archivo monetloader.7z:',
+        files: ['https://cdn.discordapp.com/attachments/1479296105819803799/1479302678096908471/monetloader.7z?ex=69f8ab3a&is=69f759ba&hm=c5f6f50de71f61443210794fcc061fc4c9651968f270221da57c0cb1c5e37a88&']
+      });
+
+      return;
+    }
+
     // ===== SIACEPTO =====
     if (interaction.commandName === 'siacepto') {
+      if (!interaction.member.roles.cache.has(ROL_USUARIO)) {
+        return interaction.reply({ content: 'No tienes permiso para usar este comando.', ephemeral: true });
+      }
+
       const embedInstalacion = new EmbedBuilder()
-        .setTitle('Paso a paso para la instalacion del TS3 en Android')
         .setColor(0x1B4332)
-        .setDescription(
-          'Paso 1. Selecciona la opcion "continue without logging in" para iniciar en TS3 sin tener que loguear con tus datos.'
-        )
+        .setTitle('Instalacion de TS3 en Android - Paso 1')
+        .setDescription('Seleccionar "continue without logging in" para iniciar sin credenciales personales.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029507519840257/IMG-20251112-WA0000.jpg');
 
       const embedPaso2 = new EmbedBuilder()
         .setColor(0x1B4332)
-        .setDescription(
-          'Paso 2. Busca la opcion para anadir un servidor, senalada en la imagen del paso 2.'
-        )
+        .setTitle('Paso 2 - Anadir servidor')
+        .setDescription('Localizar la opcion para agregar un nuevo servidor.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029508036001873/IMG-20251112-WA0001.jpg');
 
       const embedPaso3 = new EmbedBuilder()
         .setColor(0x1B4332)
-        .setDescription(
-          'Paso 3. Rellena los campos que aparecen en la imagen y sustituye con tus datos.\n\nListo!'
-        )
+        .setTitle('Paso 3 - Configuracion de datos')
+        .setDescription('Completar los campos con la informacion proporcionada.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029508543512606/IMG-20251112-WA0003.jpg');
 
       const embedConfig = new EmbedBuilder()
-        .setTitle('Configuracion TS3 Android')
         .setColor(0x1B4332)
-        .setDescription(
-          'Paso 1. Dirigete a ajustes.'
-        )
+        .setTitle('Configuracion - Paso 1: Ajustes')
+        .setDescription('Acceder al menu de ajustes de la aplicacion.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035784434323496/IMG-20251112-WA0004.jpg');
 
       const embedConfig2 = new EmbedBuilder()
         .setColor(0x1B4332)
-        .setDescription(
-          'Paso 2. Activa las opciones marcadas en la imagen. Push to talk, superposicion de PTT y manos libres te ayudaran a tener una mejor experiencia al utilizar el TS3.'
-        )
+        .setTitle('Configuracion - Paso 2: Opciones de audio')
+        .setDescription('Activar Push to talk, superposicion de PTT y manos libres para optimizar la experiencia.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035784832651394/IMG-20251112-WA0005.jpg');
 
       const embedConfig3 = new EmbedBuilder()
         .setColor(0x1B4332)
-        .setDescription(
-          'Paso 3. Desactiva la opcion sensor de proximidad mostrada en la imagen a continuacion.'
-        )
+        .setTitle('Configuracion - Paso 3: Sensor de proximidad')
+        .setDescription('Desactivar el sensor de proximidad para evitar interrupciones.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035785332031529/IMG-20251112-WA0006.jpg');
 
       const embedCuenta = new EmbedBuilder()
-        .setTitle('Cuenta Junior Enlisted')
         .setColor(0x1B4332)
+        .setTitle('Credenciales de acceso - Junior Enlisted')
         .setDescription(
-          'Correo:\n`KenwayHaytham005@gmail.com`\n\n' +
-          'Contrasena:\n`USMCacceso1`\n\n' +
-          'Recordatorio: Antes de comenzar a utilizar este beneficio otorgado por la faccion, recuerda que aceptas los terminos y condiciones previamente establecidos. En caso de compartir estos datos con terceros o realizar modificaciones no autorizadas, estaras sujeto a sanciones faccionarias y administrativas graves.'
-        )
-        .setFooter({ text: 'USMC - Personal Logistico | Uso exclusivo para miembros autorizados' });
+          `Correo: KenwayHaytham005@gmail.com\n` +
+          `Contrasena: USMCacceso1\n\n` +
+          'Advertencia: El uso de estas credenciales implica la aceptacion de los terminos establecidos. Cualquier comparticion no autorizada o modificacion indebida sera sancionada.'
+        );
 
-      await interaction.reply({ content: `${interaction.user.username} ha aceptado los terminos y condiciones. Aqui tienes la guia completa:` });
+      await interaction.reply({ content: `${interaction.user.username} ha aceptado los terminos. Procediendo con la entrega de credenciales y guia:` });
       await interaction.followUp({ embeds: [embedInstalacion] });
       await interaction.followUp({ embeds: [embedPaso2] });
       await interaction.followUp({ embeds: [embedPaso3] });
@@ -461,9 +582,9 @@ client.on('interactionCreate', async interaction => {
     console.error('ERROR:', err);
 
     if (interaction.replied) {
-      interaction.followUp({ content: 'Error.', ephemeral: true });
+      interaction.followUp({ content: 'Se produjo un error en el sistema.', ephemeral: true });
     } else {
-      interaction.reply({ content: 'Error.', ephemeral: true });
+      interaction.reply({ content: 'Se produjo un error en el sistema.', ephemeral: true });
     }
   }
 });
