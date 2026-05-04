@@ -19,6 +19,7 @@ const GUILD_STAFF = '1464318287683780836';
 
 const CANAL_PRINCIPAL = '1500533467166015638';
 const CANAL_STAFF = '1500352253293498561';
+const CANAL_FIN_DIA = '1499930571785375744';
 
 // ===== ROLES POR PERMISO =====
 const ROLES_STAFF = ['1249089576270696508', '1249089640632422470'];
@@ -62,6 +63,7 @@ async function enviarTableroAutomatico() {
   
   const canalPrincipal = guildPrincipal?.channels.cache.get(CANAL_PRINCIPAL);
   const canalStaff = guildStaff?.channels.cache.get(CANAL_STAFF);
+  const canalFinDia = guildPrincipal?.channels.cache.get(CANAL_FIN_DIA);
   
   if (!canalPrincipal || !canalStaff) {
     console.log('Canales no disponibles para envio automatico');
@@ -69,27 +71,33 @@ async function enviarTableroAutomatico() {
   }
 
   const rankingOrdenado = Object.entries(data).sort((a, b) => b[1] - a[1]);
+  const fechaNY = new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  // ===== TABLERO PRINCIPAL =====
+  // ===== MENSAJE FIN DEL DIA =====
+  if (canalFinDia && canalFinDia.isTextBased()) {
+    const embedFinDia = new EmbedBuilder()
+      .setColor(0x1B4332)
+      .setDescription(`Fin del dia ${fechaNY}`);
+    
+    await canalFinDia.send({ embeds: [embedFinDia] });
+  }
+
+  // ===== TABLERO PRINCIPAL LIMPIO =====
   const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
     const member = guildPrincipal?.members.cache.get(id);
     const nombre = member ? member.displayName || member.user.username : 'Desconocido';
     const posicion = (index + 1).toString().padStart(2, '0');
-    const barra = '■'.repeat(Math.min(Math.floor(efectividades / 5) + 1, 20));
-    return `[${posicion}] ${nombre} ${barra} ${efectividades}`;
+    const barra = '▬'.repeat(Math.min(Math.floor(efectividades / 5) + 1, 15));
+    return `\`${posicion}\` ${nombre} ${barra} ${efectividades}`;
   });
 
   const embedPrincipal = new EmbedBuilder()
     .setColor(0x1B4332)
-    .setTitle('DIA FINALIZADO - TABLERO DE EFECTIVIDADES')
+    .setTitle('EFECTIVIDADES DEL DIA')
     .setDescription(lineasPrincipal.join('\n') || 'Sin registros disponibles')
-    .addFields({
-      name: 'Informacion del sistema',
-      value: `Fecha: ${new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York' })} | Hora: 00:00 EST | Modo: Automatico`
-    })
-    .setFooter({ text: 'USMC - Sistema automatizado de cierre diario' });
+    .setFooter({ text: `${fechaNY} | Cierre automatico` });
 
-  // ===== TABLERO STAFF =====
+  // ===== TABLERO STAFF LIMPIO =====
   const lineasStaff = rankingOrdenado.map(([id, efectividades], index) => {
     const memberPrincipal = guildPrincipal?.members.cache.get(id);
     const memberStaff = guildStaff?.members.cache.get(id);
@@ -100,11 +108,8 @@ async function enviarTableroAutomatico() {
     const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
     const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
 
-    return `[${posicion}] ${nombre}\n` +
-           `Identificador: ${id}\n` +
-           `Cuenta: ${tag}\n` +
-           `Efectividades: ${efectividades} (${porcentaje}%)\n` +
-           `Sincronizacion: ${sincronizacion}`;
+    return `\`${posicion}\` ${nombre}\n` +
+           `Efectividades: ${efectividades} | ${porcentaje}% | ${sincronizacion}`;
   });
 
   const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
@@ -112,38 +117,31 @@ async function enviarTableroAutomatico() {
 
   const embedStaff = new EmbedBuilder()
     .setColor(0x1B4332)
-    .setTitle('DIA FINALIZADO - TABLERO DETALLADO STAFF')
+    .setTitle('EFECTIVIDADES DETALLADAS - STAFF')
     .setDescription(lineasStaff.join('\n\n') || 'Sin registros disponibles')
     .addFields({
-      name: 'Resumen Ejecutivo',
-      value: 
-        `Participantes: ${rankingOrdenado.length}\n` +
-        `Total acumulado: ${totalEfectividades}\n` +
-        `Promedio general: ${promedio}\n` +
-        `Cierre automatico: 00:00 EST`
+      name: 'Resumen',
+      value: `Total: ${totalEfectividades} | Promedio: ${promedio} | Participantes: ${rankingOrdenado.length}`
     })
-    .setTimestamp()
-    .setFooter({ text: 'USMC - Staff Logistico | Informacion confidencial' });
+    .setFooter({ text: `${fechaNY} | Informacion confidencial` });
 
   await canalPrincipal.send({ embeds: [embedPrincipal] });
   await canalStaff.send({ embeds: [embedStaff] });
   
-  console.log(`Tablero automatico enviado: ${new Date().toLocaleString('es-ES', { timeZone: 'America/New_York' })} EST`);
+  console.log(`Tablero automatico enviado: ${fechaNY}`);
 }
 
 // ===== SISTEMA DE HORARIO AUTOMATICO =====
 function iniciarHorarioAutomatico() {
-  // Verificar cada minuto
   setInterval(() => {
     const ahora = new Date();
     const opciones = { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false };
     const horaNY = ahora.toLocaleString('en-US', opciones);
     
-    // 00:00 = medianoche
     if (horaNY === '00:00') {
       enviarTableroAutomatico();
     }
-  }, 60000); // 60000ms = 1 minuto
+  }, 60000);
   
   console.log('Sistema de horario automatico activado. Verificando hora NY cada minuto.');
 }
@@ -205,7 +203,6 @@ client.once('ready', async () => {
     await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_STAFF), { body: commands });
     console.log('Comandos registrados en servidor STAFF');
 
-    // Iniciar sistema automatico despues de que el bot este listo
     iniciarHorarioAutomatico();
 
   } catch (err) {
@@ -241,7 +238,7 @@ client.on('interactionCreate', async interaction => {
 
       const embed = new EmbedBuilder()
         .setColor(0x2D5A3D)
-        .setDescription(`Operacion completada. Se agregaron ${cantidad} unidades a ${usuario.username}. Balance actual: ${data[usuario.id]}`);
+        .setDescription(`Se agregaron ${cantidad} efectividades a ${usuario.username}. Total: ${data[usuario.id]}`);
 
       return interaction.reply({ embeds: [embed] });
     }
@@ -266,7 +263,7 @@ client.on('interactionCreate', async interaction => {
 
       const embed = new EmbedBuilder()
         .setColor(0x2D5A3D)
-        .setDescription(`Operacion completada. Se retiraron ${cantidad} unidades a ${usuario.username}. Balance actual: ${data[usuario.id]}`);
+        .setDescription(`Se retiraron ${cantidad} efectividades a ${usuario.username}. Total: ${data[usuario.id]}`);
 
       return interaction.reply({ embeds: [embed] });
     }
@@ -281,8 +278,8 @@ client.on('interactionCreate', async interaction => {
 
       const embed = new EmbedBuilder()
         .setColor(0x2D5A3D)
-        .setTitle('Consulta de Balance')
-        .setDescription(`Usuario: ${interaction.user.username}\nBalance actual: ${efectividades} efectividades`);
+        .setTitle('Consulta de Efectividades')
+        .setDescription(`Usuario: ${interaction.user.username}\nEfectividades actuales: ${efectividades}`);
 
       return interaction.reply({ embeds: [embed], ephemeral: true });
     }
@@ -300,23 +297,21 @@ client.on('interactionCreate', async interaction => {
       const canalStaff = guildStaff?.channels.cache.get(CANAL_STAFF);
 
       const rankingOrdenado = Object.entries(data).sort((a, b) => b[1] - a[1]);
+      const fechaHoy = new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
       const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
         const member = guildPrincipal?.members.cache.get(id);
         const nombre = member ? member.displayName || member.user.username : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
-        const barra = '■'.repeat(Math.min(Math.floor(efectividades / 5) + 1, 20));
-        return `[${posicion}] ${nombre} ${barra} ${efectividades}`;
+        const barra = '▬'.repeat(Math.min(Math.floor(efectividades / 5) + 1, 15));
+        return `\`${posicion}\` ${nombre} ${barra} ${efectividades}`;
       });
 
       const embedPrincipal = new EmbedBuilder()
         .setColor(0x1B4332)
-        .setTitle('TABLERO DE EFECTIVIDADES')
+        .setTitle('EFECTIVIDADES DEL DIA')
         .setDescription(lineasPrincipal.join('\n') || 'Sin registros disponibles')
-        .addFields({
-          name: 'Informacion',
-          value: `Actualizado: ${new Date().toLocaleDateString('es-ES')} | Responsable: ${interaction.user.username}`
-        });
+        .setFooter({ text: `${fechaHoy} | Generado por ${interaction.user.username}` });
 
       const lineasStaff = rankingOrdenado.map(([id, efectividades], index) => {
         const memberPrincipal = guildPrincipal?.members.cache.get(id);
@@ -328,11 +323,8 @@ client.on('interactionCreate', async interaction => {
         const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
         const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
 
-        return `[${posicion}] ${nombre}\n` +
-               `Identificador: ${id}\n` +
-               `Cuenta: ${tag}\n` +
-               `Efectividades: ${efectividades} (${porcentaje}%)\n` +
-               `Sincronizacion: ${sincronizacion}`;
+        return `\`${posicion}\` ${nombre}\n` +
+               `Efectividades: ${efectividades} | ${porcentaje}% | ${sincronizacion}`;
       });
 
       const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
@@ -340,17 +332,13 @@ client.on('interactionCreate', async interaction => {
 
       const embedStaff = new EmbedBuilder()
         .setColor(0x1B4332)
-        .setTitle('TABLERO DETALLADO - STAFF')
+        .setTitle('EFECTIVIDADES DETALLADAS - STAFF')
         .setDescription(lineasStaff.join('\n\n') || 'Sin registros disponibles')
         .addFields({
-          name: 'Resumen Ejecutivo',
-          value: 
-            `Participantes: ${rankingOrdenado.length}\n` +
-            `Total acumulado: ${totalEfectividades}\n` +
-            `Promedio general: ${promedio}\n` +
-            `Generado por: ${interaction.user.tag}`
+          name: 'Resumen',
+          value: `Total: ${totalEfectividades} | Promedio: ${promedio} | Participantes: ${rankingOrdenado.length}`
         })
-        .setTimestamp();
+        .setFooter({ text: `${fechaHoy} | Generado por ${interaction.user.tag}` });
 
       let enviadoPrincipal = false;
       let enviadoStaff = false;
