@@ -21,7 +21,7 @@ const CANAL_PRINCIPAL = '1500533467166015638';
 const CANAL_STAFF = '1500352253293498561';
 const CANAL_FIN_DIA = '1499930571785375744';
 
-// Hilos para adv y registro (necesitan fetch)
+// Hilos para adv y registro
 const HILO_ADV = '1500992168288981143';
 const HILO_REGISTRO = '1500992124546711572';
 const HILO_ADV2 = '1501002001885167776';
@@ -68,10 +68,11 @@ function tieneAlgunRol(member, rolesArray) {
   return rolesArray.some(rolId => member.roles.cache.has(rolId));
 }
 
-// ===== FUNCION PARA OBTENER CANAL/HILO =====
+// ===== FUNCION PARA OBTENER CANAL/HILO CON CACHE FORZADA =====
 async function obtenerCanal(channelId) {
   try {
-    const canal = await client.channels.fetch(channelId);
+    // Primero intentar con fetch (para hilos)
+    const canal = await client.channels.fetch(channelId, { force: true });
     return canal;
   } catch (err) {
     console.error(`Error al obtener canal/hilo ${channelId}:`, err.message);
@@ -219,7 +220,7 @@ const commands = [
   // ===== ADVERTENCIAS =====
   new SlashCommandBuilder()
     .setName('adv')
-    .setDescription('Enviar advertencia al canal principal')
+    .setDescription('Enviar advertencia al hilo principal')
     .addUserOption(o => o.setName('nombre').setDescription('Usuario a advertir').setRequired(true))
     .addStringOption(o => o.setName('razon').setDescription('Razon de la advertencia').setRequired(true))
     .addStringOption(o => o.setName('conteo').setDescription('Conteo de advertencias (ej: 1/2)').setRequired(true))
@@ -227,7 +228,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('adv2')
-    .setDescription('Enviar advertencia al canal secundario')
+    .setDescription('Enviar advertencia al hilo secundario')
     .addUserOption(o => o.setName('nombre').setDescription('Usuario a advertir').setRequired(true))
     .addStringOption(o => o.setName('razon').setDescription('Razon de la advertencia').setRequired(true))
     .addStringOption(o => o.setName('conteo').setDescription('Conteo de advertencias (ej: 1/2)').setRequired(true))
@@ -236,7 +237,7 @@ const commands = [
   // ===== REGISTROS =====
   new SlashCommandBuilder()
     .setName('registro')
-    .setDescription('Enviar registro de cambio de rol al canal principal')
+    .setDescription('Enviar registro de cambio de rol al hilo principal')
     .addUserOption(o => o.setName('nombre').setDescription('Usuario afectado').setRequired(true))
     .addStringOption(o => o.setName('razon').setDescription('Razon del cambio').setRequired(true))
     .addRoleOption(o => o.setName('retira').setDescription('Rol que se retira').setRequired(true))
@@ -245,7 +246,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('registro2')
-    .setDescription('Enviar registro de cambio de rol al canal secundario')
+    .setDescription('Enviar registro de cambio de rol al hilo secundario')
     .addUserOption(o => o.setName('nombre').setDescription('Usuario afectado').setRequired(true))
     .addStringOption(o => o.setName('razon').setDescription('Razon del cambio').setRequired(true))
     .addRoleOption(o => o.setName('retira').setDescription('Rol que se retira').setRequired(true))
@@ -614,8 +615,12 @@ client.on('interactionCreate', async interaction => {
 
       const canalAdv = await obtenerCanal(HILO_ADV);
 
-      if (!canalAdv || !canalAdv.isTextBased()) {
-        return interaction.reply({ content: 'Hilo de advertencias no disponible. Verifique que el ID sea correcto y que el bot tenga acceso.', ephemeral: true });
+      if (!canalAdv) {
+        return interaction.reply({ content: 'No se pudo acceder al hilo de advertencias. Verifique que el bot tenga permisos en el hilo.', ephemeral: true });
+      }
+
+      if (!canalAdv.isTextBased()) {
+        return interaction.reply({ content: 'El hilo encontrado no permite mensajes de texto.', ephemeral: true });
       }
 
       const embed = new EmbedBuilder()
@@ -650,8 +655,12 @@ client.on('interactionCreate', async interaction => {
 
       const canalAdv2 = await obtenerCanal(HILO_ADV2);
 
-      if (!canalAdv2 || !canalAdv2.isTextBased()) {
-        return interaction.reply({ content: 'Hilo de advertencias secundario no disponible. Verifique que el ID sea correcto y que el bot tenga acceso.', ephemeral: true });
+      if (!canalAdv2) {
+        return interaction.reply({ content: 'No se pudo acceder al hilo de advertencias secundario. Verifique que el bot tenga permisos en el hilo.', ephemeral: true });
+      }
+
+      if (!canalAdv2.isTextBased()) {
+        return interaction.reply({ content: 'El hilo encontrado no permite mensajes de texto.', ephemeral: true });
       }
 
       const embed = new EmbedBuilder()
@@ -687,8 +696,12 @@ client.on('interactionCreate', async interaction => {
 
       const canalRegistro = await obtenerCanal(HILO_REGISTRO);
 
-      if (!canalRegistro || !canalRegistro.isTextBased()) {
-        return interaction.reply({ content: 'Hilo de registro no disponible. Verifique que el ID sea correcto y que el bot tenga acceso.', ephemeral: true });
+      if (!canalRegistro) {
+        return interaction.reply({ content: 'No se pudo acceder al hilo de registro. Verifique que el bot tenga permisos en el hilo.', ephemeral: true });
+      }
+
+      if (!canalRegistro.isTextBased()) {
+        return interaction.reply({ content: 'El hilo encontrado no permite mensajes de texto.', ephemeral: true });
       }
 
       const embed = new EmbedBuilder()
@@ -725,8 +738,12 @@ client.on('interactionCreate', async interaction => {
 
       const canalRegistro2 = await obtenerCanal(HILO_REGISTRO2);
 
-      if (!canalRegistro2 || !canalRegistro2.isTextBased()) {
-        return interaction.reply({ content: 'Hilo de registro secundario no disponible. Verifique que el ID sea correcto y que el bot tenga acceso.', ephemeral: true });
+      if (!canalRegistro2) {
+        return interaction.reply({ content: 'No se pudo acceder al hilo de registro secundario. Verifique que el bot tenga permisos en el hilo.', ephemeral: true });
+      }
+
+      if (!canalRegistro2.isTextBased()) {
+        return interaction.reply({ content: 'El hilo encontrado no permite mensajes de texto.', ephemeral: true });
       }
 
       const embed = new EmbedBuilder()
