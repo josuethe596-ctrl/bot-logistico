@@ -102,7 +102,6 @@ async function enviarTableroAutomatico() {
     const memberPrincipal = guildPrincipal?.members.cache.get(id);
     const memberStaff = guildStaff?.members.cache.get(id);
     const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Desconocido';
-    const tag = memberPrincipal?.user.tag || 'N/A';
     const posicion = (index + 1).toString().padStart(2, '0');
     const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
     const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
@@ -183,6 +182,10 @@ const commands = [
   new SlashCommandBuilder()
     .setName('android')
     .setDescription('Macros y archivo monetloader para Android'),
+
+  new SlashCommandBuilder()
+    .setName('pc')
+    .setDescription('Macros actualizadas y guia para PC'),
 
   new SlashCommandBuilder()
     .setName('siacepto')
@@ -317,7 +320,6 @@ client.on('interactionCreate', async interaction => {
         const memberPrincipal = guildPrincipal?.members.cache.get(id);
         const memberStaff = guildStaff?.members.cache.get(id);
         const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Desconocido';
-        const tag = memberPrincipal?.user.tag || 'N/A';
         const posicion = (index + 1).toString().padStart(2, '0');
         const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
         const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
@@ -503,6 +505,40 @@ client.on('interactionCreate', async interaction => {
       return;
     }
 
+    // ===== PC =====
+    if (interaction.commandName === 'pc') {
+      if (!interaction.member.roles.cache.has(ROL_ESPECIAL)) {
+        return interaction.reply({ content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
+      }
+
+      const embedMacros = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setTitle('Macros Actualizadas para PC')
+        .setDescription('https://www.mediafire.com/file/u8q6bferz6igasf/Macros_USMC_Logistica_v9.pdf/file');
+
+      const embedArchivo = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setTitle('Archivo de Roles y Macros')
+        .setDescription('https://www.mediafire.com/file/ysctncbpyxum385/LUA_Macros_V2.zip/file');
+
+      const embedTutorial = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setTitle('Tutorial de Instalacion')
+        .setDescription('https://youtu.be/NLNJ3AZ-X2Y');
+
+      const embedVideo = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setTitle('Video Explicativo - Macros en el Juego')
+        .setDescription('https://youtu.be/6yEqI8ML4eY');
+
+      await interaction.reply({ content: 'Recursos para PC:', embeds: [embedMacros] });
+      await interaction.followUp({ embeds: [embedArchivo] });
+      await interaction.followUp({ embeds: [embedTutorial] });
+      await interaction.followUp({ embeds: [embedVideo] });
+
+      return;
+    }
+
     // ===== SIACEPTO =====
     if (interaction.commandName === 'siacepto') {
       if (!interaction.member.roles.cache.has(ROL_USUARIO)) {
@@ -550,7 +586,7 @@ client.on('interactionCreate', async interaction => {
         .setTitle('Credenciales de acceso - Junior Enlisted')
         .setDescription(
           `Correo: KenwayHaytham005@gmail.com\n` +
-          `Contrasena: USMCacceso1\n\n` +
+          `Contrasena: UMCSacceso501\n\n` +
           'Advertencia: El uso de estas credenciales implica la aceptacion de los terminos establecidos. Cualquier comparticion no autorizada o modificacion indebida sera sancionada.'
         );
 
