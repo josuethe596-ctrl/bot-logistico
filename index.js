@@ -21,10 +21,11 @@ const CANAL_PRINCIPAL = '1500533467166015638';
 const CANAL_STAFF = '1500352253293498561';
 const CANAL_FIN_DIA = '1499930571785375744';
 
-const CANAL_ADV = '1500992168288981143';
-const CANAL_ADV2 = '1501002001885167776';
-const CANAL_REGISTRO = '1500992124546711572';
-const CANAL_REGISTRO2 = '1501002052149444628';
+// Hilos para adv y registro (necesitan fetch)
+const HILO_ADV = '1500992168288981143';
+const HILO_REGISTRO = '1500992124546711572';
+const HILO_ADV2 = '1501002001885167776';
+const HILO_REGISTRO2 = '1501002052149444628';
 
 // ===== ROLES POR PERMISO =====
 const ROLES_STAFF = ['1249089576270696508', '1249089640632422470'];
@@ -65,6 +66,17 @@ function saveData(data) {
 // ===== FUNCIONES DE VERIFICACIÓN =====
 function tieneAlgunRol(member, rolesArray) {
   return rolesArray.some(rolId => member.roles.cache.has(rolId));
+}
+
+// ===== FUNCION PARA OBTENER CANAL/HILO =====
+async function obtenerCanal(channelId) {
+  try {
+    const canal = await client.channels.fetch(channelId);
+    return canal;
+  } catch (err) {
+    console.error(`Error al obtener canal/hilo ${channelId}:`, err.message);
+    return null;
+  }
 }
 
 // ===== FUNCION PARA ENVIAR TABLERO AUTOMATICO =====
@@ -600,11 +612,10 @@ client.on('interactionCreate', async interaction => {
       const conteo = interaction.options.getString('conteo');
       const firma = interaction.options.getUser('firma');
 
-      const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
-      const canalAdv = guildPrincipal?.channels.cache.get(CANAL_ADV);
+      const canalAdv = await obtenerCanal(HILO_ADV);
 
       if (!canalAdv || !canalAdv.isTextBased()) {
-        return interaction.reply({ content: 'Canal de advertencias no disponible.', ephemeral: true });
+        return interaction.reply({ content: 'Hilo de advertencias no disponible. Verifique que el ID sea correcto y que el bot tenga acceso.', ephemeral: true });
       }
 
       const embed = new EmbedBuilder()
@@ -621,7 +632,7 @@ client.on('interactionCreate', async interaction => {
 
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x2D5A3D)
-        .setDescription('Advertencia enviada al canal principal.');
+        .setDescription('Advertencia enviada al hilo principal.');
 
       return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
     }
@@ -637,11 +648,10 @@ client.on('interactionCreate', async interaction => {
       const conteo = interaction.options.getString('conteo');
       const firma = interaction.options.getUser('firma');
 
-      const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
-      const canalAdv2 = guildPrincipal?.channels.cache.get(CANAL_ADV2);
+      const canalAdv2 = await obtenerCanal(HILO_ADV2);
 
       if (!canalAdv2 || !canalAdv2.isTextBased()) {
-        return interaction.reply({ content: 'Canal de advertencias secundario no disponible.', ephemeral: true });
+        return interaction.reply({ content: 'Hilo de advertencias secundario no disponible. Verifique que el ID sea correcto y que el bot tenga acceso.', ephemeral: true });
       }
 
       const embed = new EmbedBuilder()
@@ -658,7 +668,7 @@ client.on('interactionCreate', async interaction => {
 
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x2D5A3D)
-        .setDescription('Advertencia enviada al canal secundario.');
+        .setDescription('Advertencia enviada al hilo secundario.');
 
       return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
     }
@@ -675,11 +685,10 @@ client.on('interactionCreate', async interaction => {
       const concede = interaction.options.getRole('concede');
       const firma = interaction.options.getUser('firma');
 
-      const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
-      const canalRegistro = guildPrincipal?.channels.cache.get(CANAL_REGISTRO);
+      const canalRegistro = await obtenerCanal(HILO_REGISTRO);
 
       if (!canalRegistro || !canalRegistro.isTextBased()) {
-        return interaction.reply({ content: 'Canal de registro no disponible.', ephemeral: true });
+        return interaction.reply({ content: 'Hilo de registro no disponible. Verifique que el ID sea correcto y que el bot tenga acceso.', ephemeral: true });
       }
 
       const embed = new EmbedBuilder()
@@ -697,7 +706,7 @@ client.on('interactionCreate', async interaction => {
 
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x2D5A3D)
-        .setDescription('Registro enviado al canal principal.');
+        .setDescription('Registro enviado al hilo principal.');
 
       return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
     }
@@ -714,11 +723,10 @@ client.on('interactionCreate', async interaction => {
       const concede = interaction.options.getRole('concede');
       const firma = interaction.options.getUser('firma');
 
-      const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
-      const canalRegistro2 = guildPrincipal?.channels.cache.get(CANAL_REGISTRO2);
+      const canalRegistro2 = await obtenerCanal(HILO_REGISTRO2);
 
       if (!canalRegistro2 || !canalRegistro2.isTextBased()) {
-        return interaction.reply({ content: 'Canal de registro secundario no disponible.', ephemeral: true });
+        return interaction.reply({ content: 'Hilo de registro secundario no disponible. Verifique que el ID sea correcto y que el bot tenga acceso.', ephemeral: true });
       }
 
       const embed = new EmbedBuilder()
@@ -736,7 +744,7 @@ client.on('interactionCreate', async interaction => {
 
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x2D5A3D)
-        .setDescription('Registro enviado al canal secundario.');
+        .setDescription('Registro enviado al hilo secundario.');
 
       return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
     }
