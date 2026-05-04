@@ -21,10 +21,23 @@ const CANAL_PRINCIPAL = '1500533467166015638';
 const CANAL_STAFF = '1500352253293498561';
 const CANAL_FIN_DIA = '1499930571785375744';
 
+const CANAL_ADV = '1500992168288981143';
+const CANAL_ADV2 = '1501002001885167776';
+const CANAL_REGISTRO = '1500992124546711572';
+const CANAL_REGISTRO2 = '1501002052149444628';
+
 // ===== ROLES POR PERMISO =====
 const ROLES_STAFF = ['1249089576270696508', '1249089640632422470'];
 const ROL_USUARIO = '1249089172308885576';
 const ROL_ESPECIAL = '1249095569150836781';
+
+// /adv /adv2 /registro /registro2
+const ROLES_REGISTRO = [
+  '1467236078007353487',
+  '1467236084445614223',
+  '1467236378478903468',
+  '1467236381691609423'
+];
 
 const DATA_FILE = './data.json';
 
@@ -189,7 +202,43 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('siacepto')
-    .setDescription('Aceptar terminos y recibir guia TS3 Android')
+    .setDescription('Aceptar terminos y recibir guia TS3 Android'),
+
+  // ===== ADVERTENCIAS =====
+  new SlashCommandBuilder()
+    .setName('adv')
+    .setDescription('Enviar advertencia al canal principal')
+    .addUserOption(o => o.setName('nombre').setDescription('Usuario a advertir').setRequired(true))
+    .addStringOption(o => o.setName('razon').setDescription('Razon de la advertencia').setRequired(true))
+    .addStringOption(o => o.setName('conteo').setDescription('Conteo de advertencias (ej: 1/2)').setRequired(true))
+    .addUserOption(o => o.setName('firma').setDescription('Responsable de la advertencia').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('adv2')
+    .setDescription('Enviar advertencia al canal secundario')
+    .addUserOption(o => o.setName('nombre').setDescription('Usuario a advertir').setRequired(true))
+    .addStringOption(o => o.setName('razon').setDescription('Razon de la advertencia').setRequired(true))
+    .addStringOption(o => o.setName('conteo').setDescription('Conteo de advertencias (ej: 1/2)').setRequired(true))
+    .addUserOption(o => o.setName('firma').setDescription('Responsable de la advertencia').setRequired(true)),
+
+  // ===== REGISTROS =====
+  new SlashCommandBuilder()
+    .setName('registro')
+    .setDescription('Enviar registro de cambio de rol al canal principal')
+    .addUserOption(o => o.setName('nombre').setDescription('Usuario afectado').setRequired(true))
+    .addStringOption(o => o.setName('razon').setDescription('Razon del cambio').setRequired(true))
+    .addRoleOption(o => o.setName('retira').setDescription('Rol que se retira').setRequired(true))
+    .addRoleOption(o => o.setName('concede').setDescription('Rol que se concede').setRequired(true))
+    .addUserOption(o => o.setName('firma').setDescription('Responsable del registro').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('registro2')
+    .setDescription('Enviar registro de cambio de rol al canal secundario')
+    .addUserOption(o => o.setName('nombre').setDescription('Usuario afectado').setRequired(true))
+    .addStringOption(o => o.setName('razon').setDescription('Razon del cambio').setRequired(true))
+    .addRoleOption(o => o.setName('retira').setDescription('Rol que se retira').setRequired(true))
+    .addRoleOption(o => o.setName('concede').setDescription('Rol que se concede').setRequired(true))
+    .addUserOption(o => o.setName('firma').setDescription('Responsable del registro').setRequired(true))
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR COMANDOS =====
@@ -538,6 +587,158 @@ client.on('interactionCreate', async interaction => {
       await interaction.followUp({ embeds: [embedVideo] });
 
       return;
+    }
+
+    // ===== ADV =====
+    if (interaction.commandName === 'adv') {
+      if (!tieneAlgunRol(interaction.member, ROLES_REGISTRO)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+      }
+
+      const nombre = interaction.options.getUser('nombre');
+      const razon = interaction.options.getString('razon');
+      const conteo = interaction.options.getString('conteo');
+      const firma = interaction.options.getUser('firma');
+
+      const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
+      const canalAdv = guildPrincipal?.channels.cache.get(CANAL_ADV);
+
+      if (!canalAdv || !canalAdv.isTextBased()) {
+        return interaction.reply({ content: 'Canal de advertencias no disponible.', ephemeral: true });
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setTitle('Formato de advertencia')
+        .setDescription(
+          `Nombre: ${nombre}\n` +
+          `Razon: ${razon}\n` +
+          `Conteo: ${conteo}\n\n` +
+          `Firma: ${firma}`
+        );
+
+      await canalAdv.send({ embeds: [embed] });
+
+      const embedConfirmacion = new EmbedBuilder()
+        .setColor(0x2D5A3D)
+        .setDescription('Advertencia enviada al canal principal.');
+
+      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+    }
+
+    // ===== ADV2 =====
+    if (interaction.commandName === 'adv2') {
+      if (!tieneAlgunRol(interaction.member, ROLES_REGISTRO)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+      }
+
+      const nombre = interaction.options.getUser('nombre');
+      const razon = interaction.options.getString('razon');
+      const conteo = interaction.options.getString('conteo');
+      const firma = interaction.options.getUser('firma');
+
+      const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
+      const canalAdv2 = guildPrincipal?.channels.cache.get(CANAL_ADV2);
+
+      if (!canalAdv2 || !canalAdv2.isTextBased()) {
+        return interaction.reply({ content: 'Canal de advertencias secundario no disponible.', ephemeral: true });
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setTitle('Formato de advertencia')
+        .setDescription(
+          `Nombre: ${nombre}\n` +
+          `Razon: ${razon}\n` +
+          `Conteo: ${conteo}\n\n` +
+          `Firma: ${firma}`
+        );
+
+      await canalAdv2.send({ embeds: [embed] });
+
+      const embedConfirmacion = new EmbedBuilder()
+        .setColor(0x2D5A3D)
+        .setDescription('Advertencia enviada al canal secundario.');
+
+      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+    }
+
+    // ===== REGISTRO =====
+    if (interaction.commandName === 'registro') {
+      if (!tieneAlgunRol(interaction.member, ROLES_REGISTRO)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+      }
+
+      const nombre = interaction.options.getUser('nombre');
+      const razon = interaction.options.getString('razon');
+      const retira = interaction.options.getRole('retira');
+      const concede = interaction.options.getRole('concede');
+      const firma = interaction.options.getUser('firma');
+
+      const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
+      const canalRegistro = guildPrincipal?.channels.cache.get(CANAL_REGISTRO);
+
+      if (!canalRegistro || !canalRegistro.isTextBased()) {
+        return interaction.reply({ content: 'Canal de registro no disponible.', ephemeral: true });
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setTitle('Formato de registro')
+        .setDescription(
+          `Nombre: ${nombre}\n\n` +
+          `Razon: ${razon}\n\n` +
+          `Se le retira: ${retira}\n\n` +
+          `Se le concede: ${concede}\n\n` +
+          `Firma del responsable: ${firma}`
+        );
+
+      await canalRegistro.send({ embeds: [embed] });
+
+      const embedConfirmacion = new EmbedBuilder()
+        .setColor(0x2D5A3D)
+        .setDescription('Registro enviado al canal principal.');
+
+      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+    }
+
+    // ===== REGISTRO2 =====
+    if (interaction.commandName === 'registro2') {
+      if (!tieneAlgunRol(interaction.member, ROLES_REGISTRO)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+      }
+
+      const nombre = interaction.options.getUser('nombre');
+      const razon = interaction.options.getString('razon');
+      const retira = interaction.options.getRole('retira');
+      const concede = interaction.options.getRole('concede');
+      const firma = interaction.options.getUser('firma');
+
+      const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
+      const canalRegistro2 = guildPrincipal?.channels.cache.get(CANAL_REGISTRO2);
+
+      if (!canalRegistro2 || !canalRegistro2.isTextBased()) {
+        return interaction.reply({ content: 'Canal de registro secundario no disponible.', ephemeral: true });
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(0x1B4332)
+        .setTitle('Formato de registro')
+        .setDescription(
+          `Nombre: ${nombre}\n\n` +
+          `Razon: ${razon}\n\n` +
+          `Se le retira: ${retira}\n\n` +
+          `Se le concede: ${concede}\n\n` +
+          `Firma del responsable: ${firma}`
+        );
+
+      await canalRegistro2.send({ embeds: [embed] });
+
+      const embedConfirmacion = new EmbedBuilder()
+        .setColor(0x2D5A3D)
+        .setDescription('Registro enviado al canal secundario.');
+
+      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
     }
 
     // ===== SIACEPTO =====
