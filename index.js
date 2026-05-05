@@ -1,12 +1,15 @@
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 
-// ===== PROTECCIÓN ANTI-CRASH =====
+// ===== PROTECCION ANTI-CRASH =====
 process.on('uncaughtException', err => console.error('ERROR GLOBAL:', err));
 process.on('unhandledRejection', err => console.error('PROMISE ERROR:', err));
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers
+  ]
 });
 
 // ===== CONFIG =====
@@ -27,6 +30,9 @@ const HILO_REGISTRO = '1500992124546711572';
 const HILO_ADV2 = '1501002001885167776';
 const HILO_REGISTRO2 = '1501002052149444628';
 
+// Hilo de foro para informes semanales
+const HILO_INFORME = 'PON_AQUI_EL_ID_DEL_HILO_DE_FORO';
+
 // ===== ROLES POR PERMISO =====
 const ROLES_STAFF = ['1249089576270696508', '1249089640632422470'];
 const ROL_USUARIO = '1249089172308885576';
@@ -40,12 +46,20 @@ const ROLES_REGISTRO = [
   '1467236381691609423'
 ];
 
+// Rol para conteo de miembros en informe
+const ROL_MIEMBROS_INFORME = '1467162969774227713';
+
+// Roles de comandantes para el informe
+const ROL_COMANDANTE = '858160581499813930';
+const ROL_SEGUNDO_COMANDANTE = '1221553900285329472';
+const ROL_RESPONSABLE_INFORME = '1249072776480952430';
+
 const DATA_FILE = './data.json';
 
 // ===== CREAR JSON SI NO EXISTE =====
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, '{}');
-  console.log('data.json creado automáticamente');
+  console.log('data.json creado automaticamente');
 }
 
 // ===== DATA =====
@@ -63,16 +77,27 @@ function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// ===== FUNCIONES DE VERIFICACIÓN =====
+// ===== FUNCIONES DE VERIFICACION =====
 function tieneAlgunRol(member, rolesArray) {
   return rolesArray.some(rolId => member.roles.cache.has(rolId));
 }
 
-// ===== FUNCION PARA OBTENER CANAL/HILO CON CACHE FORZADA =====
+// ===== FUNCION PARA OBTENER CANAL/HILO CON SOPORTE FORO =====
 async function obtenerCanal(channelId) {
   try {
-    // Primero intentar con fetch (para hilos)
-    const canal = await client.channels.fetch(channelId, { force: true });
+    let canal = await client.channels.fetch(channelId, { force: true });
+    
+    if (canal && canal.isThread && canal.isThread()) {
+      if (canal.archived) {
+        try {
+          await canal.setArchived(false);
+          console.log(`Hilo ${channelId} desarchivado automaticamente`);
+        } catch (archiveErr) {
+          console.warn(`No se pudo desarchivar hilo ${channelId}:`, archiveErr.message);
+        }
+      }
+    }
+    
     return canal;
   } catch (err) {
     console.error(`Error al obtener canal/hilo ${channelId}:`, err.message);
@@ -99,7 +124,6 @@ async function enviarTableroAutomatico() {
   const rankingOrdenado = Object.entries(data).sort((a, b) => b[1] - a[1]);
   const fechaNY = new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  // ===== MENSAJE FIN DEL DIA =====
   if (canalFinDia && canalFinDia.isTextBased()) {
     const embedFinDia = new EmbedBuilder()
       .setColor(0x1B4332)
@@ -108,7 +132,6 @@ async function enviarTableroAutomatico() {
     await canalFinDia.send({ embeds: [embedFinDia] });
   }
 
-  // ===== TABLERO PRINCIPAL LIMPIO =====
   const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
     const member = guildPrincipal?.members.cache.get(id);
     const nombre = member ? member.displayName || member.user.username : 'Desconocido';
@@ -123,7 +146,6 @@ async function enviarTableroAutomatico() {
     .setDescription(lineasPrincipal.join('\n') || 'Sin registros disponibles')
     .setFooter({ text: `${fechaNY} | Cierre automatico` });
 
-  // ===== TABLERO STAFF LIMPIO =====
   const lineasStaff = rankingOrdenado.map(([id, efectividades], index) => {
     const memberPrincipal = guildPrincipal?.members.cache.get(id);
     const memberStaff = guildStaff?.members.cache.get(id);
@@ -169,6 +191,52 @@ function iniciarHorarioAutomatico() {
   }, 60000);
   
   console.log('Sistema de horario automatico activado. Verificando hora NY cada minuto.');
+}
+
+// ===== FUNCION PARA GENERAR INFORME SEMANAL =====
+async function generarInformeSemanal(guild, operativos, observaciones, comandanteId, segundoComandanteId) {
+  // Obtener miembros con el rol especificado
+  await guild.members.fetch();
+  const miembrosConRol = guild.members.cache.filter(m => m.roles.cache.has(ROL_MIEMBROS_INFORME));
+  
+  // Formatear lista de miembros con sus roles/rangos
+  const listaMiembros = miembrosConRol.map(m => {
+    // Buscar el rol que parezca un rango (SS, SGT, LCPL, PFC, PVT, etc.)
+    const rolRango = m.roles.cache.find(r => 
+      ['SS', 'SGT', 'LCPL', 'CPL', 'PFC', 'PVT', 'SPC', 'WO', 'LT', 'CPT', 'MAJ', 'COL'].some(
+        rank => r.name.toUpperCase().includes(rank) || r.name.toUpperCase().startsWith(rank)
+      )
+    );
+    const rango = rolRango ? rolRango.name.split(' ')[0] : 'PVT';
+    return `${rango} | ${m.displayName || m.user.username}`;
+  }).sort().join('\n');
+
+  // Calcular fechas de la semana (lunes a domingo)
+  const hoy = new Date();
+  const diaSemana = hoy.getDay();
+  const diffLunes = hoy.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
+  const lunes = new Date(hoy.setDate(diffLunes));
+  const domingo = new Date(hoy.setDate(lunes.getDate() + 6));
+  
+  const fechaInicio = lunes.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  const fechaFin = domingo.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
+
+  const embed = new EmbedBuilder()
+    .setColor(0x1B4332)
+    .setTitle(`Informe de la semana (${fechaInicio} - ${fechaFin})`)
+    .setDescription(
+      `## Comandantes:\n\n` +
+      `**Comandante:** <@${comandanteId}>\n` +
+      `**Segundo Comandante:** <@${segundoComandanteId}>\n` +
+      `------------------------------------\n\n` +
+      `- **Operativos realizados durante la semana**: ${operativos}\n\n` +
+      `- **Observaciones**: ${observaciones}\n\n` +
+      `__**Conteo de miembros**__\n\n` +
+      `${listaMiembros || 'No hay miembros registrados con el rol especificado.'}\n\n` +
+      `**Responsable**: <@&${ROL_RESPONSABLE_INFORME}> <@${comandanteId}>`
+    );
+
+  return embed;
 }
 
 // ===== COMANDOS =====
@@ -251,7 +319,16 @@ const commands = [
     .addStringOption(o => o.setName('razon').setDescription('Razon del cambio').setRequired(true))
     .addRoleOption(o => o.setName('retira').setDescription('Rol que se retira').setRequired(true))
     .addRoleOption(o => o.setName('concede').setDescription('Rol que se concede').setRequired(true))
-    .addUserOption(o => o.setName('firma').setDescription('Responsable del registro').setRequired(true))
+    .addUserOption(o => o.setName('firma').setDescription('Responsable del registro').setRequired(true)),
+
+  // ===== INFORME SEMANAL =====
+  new SlashCommandBuilder()
+    .setName('informe')
+    .setDescription('Generar y enviar informe semanal al hilo de foro')
+    .addStringOption(o => o.setName('operativos').setDescription('Operativos realizados durante la semana').setRequired(true))
+    .addStringOption(o => o.setName('observaciones').setDescription('Observaciones de la semana').setRequired(true))
+    .addUserOption(o => o.setName('comandante').setDescription('Comandante responsable').setRequired(true))
+    .addUserOption(o => o.setName('segundo').setDescription('Segundo comandante').setRequired(true))
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR COMANDOS =====
@@ -633,7 +710,12 @@ client.on('interactionCreate', async interaction => {
           `Firma: ${firma}`
         );
 
-      await canalAdv.send({ embeds: [embed] });
+      try {
+        await canalAdv.send({ embeds: [embed] });
+      } catch (sendErr) {
+        console.error('Error enviando al hilo de advertencias:', sendErr);
+        return interaction.reply({ content: 'No se pudo enviar al hilo. Verifica que no este archivado y que el bot tenga permisos.', ephemeral: true });
+      }
 
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x2D5A3D)
@@ -673,7 +755,12 @@ client.on('interactionCreate', async interaction => {
           `Firma: ${firma}`
         );
 
-      await canalAdv2.send({ embeds: [embed] });
+      try {
+        await canalAdv2.send({ embeds: [embed] });
+      } catch (sendErr) {
+        console.error('Error enviando al hilo de advertencias 2:', sendErr);
+        return interaction.reply({ content: 'No se pudo enviar al hilo. Verifica que no este archivado y que el bot tenga permisos.', ephemeral: true });
+      }
 
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x2D5A3D)
@@ -715,7 +802,12 @@ client.on('interactionCreate', async interaction => {
           `Firma del responsable: ${firma}`
         );
 
-      await canalRegistro.send({ embeds: [embed] });
+      try {
+        await canalRegistro.send({ embeds: [embed] });
+      } catch (sendErr) {
+        console.error('Error enviando al hilo de registro:', sendErr);
+        return interaction.reply({ content: 'No se pudo enviar al hilo. Verifica que no este archivado y que el bot tenga permisos.', ephemeral: true });
+      }
 
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x2D5A3D)
@@ -757,11 +849,66 @@ client.on('interactionCreate', async interaction => {
           `Firma del responsable: ${firma}`
         );
 
-      await canalRegistro2.send({ embeds: [embed] });
+      try {
+        await canalRegistro2.send({ embeds: [embed] });
+      } catch (sendErr) {
+        console.error('Error enviando al hilo de registro 2:', sendErr);
+        return interaction.reply({ content: 'No se pudo enviar al hilo. Verifica que no este archivado y que el bot tenga permisos.', ephemeral: true });
+      }
 
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x2D5A3D)
         .setDescription('Registro enviado al hilo secundario.');
+
+      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+    }
+
+    // ===== INFORME =====
+    if (interaction.commandName === 'informe') {
+      if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+      }
+
+      const operativos = interaction.options.getString('operativos');
+      const observaciones = interaction.options.getString('observaciones');
+      const comandante = interaction.options.getUser('comandante');
+      const segundo = interaction.options.getUser('segundo');
+
+      const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
+      
+      if (!guildPrincipal) {
+        return interaction.reply({ content: 'No se pudo acceder al servidor principal.', ephemeral: true });
+      }
+
+      // Generar el embed del informe
+      const embedInforme = await generarInformeSemanal(
+        guildPrincipal, 
+        operativos, 
+        observaciones, 
+        comandante.id, 
+        segundo.id
+      );
+
+      const canalInforme = await obtenerCanal(HILO_INFORME);
+
+      if (!canalInforme) {
+        return interaction.reply({ content: 'No se pudo acceder al hilo de informes. Verifique que el bot tenga permisos en el hilo.', ephemeral: true });
+      }
+
+      if (!canalInforme.isTextBased()) {
+        return interaction.reply({ content: 'El hilo encontrado no permite mensajes de texto.', ephemeral: true });
+      }
+
+      try {
+        await canalInforme.send({ embeds: [embedInforme] });
+      } catch (sendErr) {
+        console.error('Error enviando informe al hilo:', sendErr);
+        return interaction.reply({ content: 'No se pudo enviar al hilo. Verifica que no este archivado y que el bot tenga permisos.', ephemeral: true });
+      }
+
+      const embedConfirmacion = new EmbedBuilder()
+        .setColor(0x2D5A3D)
+        .setDescription(`Informe semanal enviado al hilo de foro. Se listaron ${guildPrincipal.members.cache.filter(m => m.roles.cache.has(ROL_MIEMBROS_INFORME)).size} miembros.`);
 
       return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
     }
