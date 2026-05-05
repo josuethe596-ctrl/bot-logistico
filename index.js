@@ -30,8 +30,8 @@ const HILO_REGISTRO = '1500992124546711572';
 const HILO_ADV2 = '1501002001885167776';
 const HILO_REGISTRO2 = '1501002052149444628';
 
-// Hilo de foro para informes semanales
-const HILO_INFORME = '1501048212872761424';
+// Hilo de foro para informes semanales - REEMPLAZA CON TU ID REAL
+const HILO_INFORME = 'PON_AQUI_EL_ID_DEL_HILO_DE_FORO';
 
 // ===== ROLES POR PERMISO =====
 const ROLES_STAFF = ['1249089576270696508', '1249089640632422470'];
@@ -44,6 +44,12 @@ const ROLES_REGISTRO = [
   '1467236084445614223',
   '1467236378478903468',
   '1467236381691609423'
+];
+
+// Roles exclusivos para /informe
+const ROLES_INFORME = [
+  '1467236078007353487',
+  '1467236084445614223'
 ];
 
 // Rol para conteo de miembros en informe
@@ -195,13 +201,10 @@ function iniciarHorarioAutomatico() {
 
 // ===== FUNCION PARA GENERAR INFORME SEMANAL =====
 async function generarInformeSemanal(guild, operativos, observaciones, comandanteId, segundoComandanteId) {
-  // Obtener miembros con el rol especificado
   await guild.members.fetch();
   const miembrosConRol = guild.members.cache.filter(m => m.roles.cache.has(ROL_MIEMBROS_INFORME));
   
-  // Formatear lista de miembros con sus roles/rangos
   const listaMiembros = miembrosConRol.map(m => {
-    // Buscar el rol que parezca un rango (SS, SGT, LCPL, PFC, PVT, etc.)
     const rolRango = m.roles.cache.find(r => 
       ['SS', 'SGT', 'LCPL', 'CPL', 'PFC', 'PVT', 'SPC', 'WO', 'LT', 'CPT', 'MAJ', 'COL'].some(
         rank => r.name.toUpperCase().includes(rank) || r.name.toUpperCase().startsWith(rank)
@@ -211,7 +214,6 @@ async function generarInformeSemanal(guild, operativos, observaciones, comandant
     return `${rango} | ${m.displayName || m.user.username}`;
   }).sort().join('\n');
 
-  // Calcular fechas de la semana (lunes a domingo)
   const hoy = new Date();
   const diaSemana = hoy.getDay();
   const diffLunes = hoy.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
@@ -865,7 +867,8 @@ client.on('interactionCreate', async interaction => {
 
     // ===== INFORME =====
     if (interaction.commandName === 'informe') {
-      if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
+      // SOLO estos 2 roles pueden usar /informe
+      if (!tieneAlgunRol(interaction.member, ROLES_INFORME)) {
         return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
@@ -880,7 +883,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: 'No se pudo acceder al servidor principal.', ephemeral: true });
       }
 
-      // Generar el embed del informe
       const embedInforme = await generarInformeSemanal(
         guildPrincipal, 
         operativos, 
@@ -906,9 +908,11 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: 'No se pudo enviar al hilo. Verifica que no este archivado y que el bot tenga permisos.', ephemeral: true });
       }
 
+      const miembrosCount = guildPrincipal.members.cache.filter(m => m.roles.cache.has(ROL_MIEMBROS_INFORME)).size;
+
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x2D5A3D)
-        .setDescription(`Informe semanal enviado al hilo de foro. Se listaron ${guildPrincipal.members.cache.filter(m => m.roles.cache.has(ROL_MIEMBROS_INFORME)).size} miembros.`);
+        .setDescription(`Informe semanal enviado al hilo de foro. Se listaron ${miembrosCount} miembros.`);
 
       return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
     }
