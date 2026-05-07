@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 
 // ===== PROTECCION ANTI-CRASH =====
@@ -23,49 +23,39 @@ const GUILD_STAFF = '1464318287683780836';
 const CANAL_PRINCIPAL = '1500533467166015638';
 const CANAL_STAFF = '1500352253293498561';
 const CANAL_FIN_DIA = '1499930571785375744';
+const CANAL_ANUNCIOS = '1499835071245586544';
+const CANAL_ANUNCIOS_LS = '1465188998099243090';
+const CANAL_ANUNCIOS_CH = '1308186822937153546';
 
-// Hilos para adv y registro
-const HILO_ADV = '1500992168288981143';
-const HILO_REGISTRO = '1500992124546711572';
-const HILO_ADV2 = '1501002001885167776';
-const HILO_REGISTRO2 = '1501002052149444628';
-
-// Hilo de foro para informes semanales - REEMPLAZA CON TU ID REAL
-const HILO_INFORME = '1501048212872761424';
+// Hilo de foro para tickets
+const HILO_TICKETS = '1501741776933879859';
 
 // ===== ROLES POR PERMISO =====
 const ROLES_STAFF = ['1249089576270696508', '1249089640632422470'];
 const ROL_USUARIO = '1249089172308885576';
 const ROL_ESPECIAL = '1249095569150836781';
 
-// /adv /adv2 /registro /registro2
-const ROLES_REGISTRO = [
-  '1467236078007353487',
-  '1467236084445614223',
-  '1467236378478903468',
-  '1467236381691609423'
-];
+// Roles para anuncios
+const ROLES_ANUNCIOS = ['1499828342499573970', '1467162969774227713'];
 
-// Roles exclusivos para /informe
-const ROLES_INFORME = [
-  '1467236078007353487',
-  '1467236084445614223'
-];
+// Roles para /rolests3
+const ROLES_ROLESTS3 = ['1499828342499573970', '1467162969774227713'];
 
-// Rol para conteo de miembros en informe
-const ROL_MIEMBROS_INFORME = '1467162969774227713';
-
-// Roles de comandantes para el informe
-const ROL_COMANDANTE = '858160581499813930';
-const ROL_SEGUNDO_COMANDANTE = '1221553900285329472';
-const ROL_RESPONSABLE_INFORME = '1249072776480952430';
+// Roles para /res y /resta
+const ROLES_RES = ['1499828342499573970', '1467162969774227713'];
 
 const DATA_FILE = './data.json';
+const TICKETS_FILE = './tickets.json';
 
 // ===== CREAR JSON SI NO EXISTE =====
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, '{}');
   console.log('data.json creado automaticamente');
+}
+
+if (!fs.existsSync(TICKETS_FILE)) {
+  fs.writeFileSync(TICKETS_FILE, '{}');
+  console.log('tickets.json creado automaticamente');
 }
 
 // ===== DATA =====
@@ -83,16 +73,45 @@ function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
+function loadTickets() {
+  try {
+    return JSON.parse(fs.readFileSync(TICKETS_FILE));
+  } catch {
+    console.log('tickets.json corrupto, reiniciando...');
+    fs.writeFileSync(TICKETS_FILE, '{}');
+    return {};
+  }
+}
+
+function saveTickets(data) {
+  fs.writeFileSync(TICKETS_FILE, JSON.stringify(data, null, 2));
+}
+
 // ===== FUNCIONES DE VERIFICACION =====
 function tieneAlgunRol(member, rolesArray) {
   return rolesArray.some(rolId => member.roles.cache.has(rolId));
+}
+
+// ===== FUNCION PARA OBTENER RANGO DE UN MIEMBRO =====
+function obtenerRango(member) {
+  const rangos = ['COL', 'MAJ', 'CPT', 'LT', 'WO-1', 'WO-2', 'WO-3', 'SPC', 'SGT', 'CPL', 'LCPL', 'PFC', 'PVT'];
+
+  for (const rango of rangos) {
+    const rolRango = member.roles.cache.find(r => 
+      r.name.toUpperCase().includes(rango) || r.name.toUpperCase().startsWith(rango)
+    );
+    if (rolRango) {
+      return rango;
+    }
+  }
+  return 'PVT';
 }
 
 // ===== FUNCION PARA OBTENER CANAL/HILO CON SOPORTE FORO =====
 async function obtenerCanal(channelId) {
   try {
     let canal = await client.channels.fetch(channelId, { force: true });
-    
+
     if (canal && canal.isThread && canal.isThread()) {
       if (canal.archived) {
         try {
@@ -103,7 +122,7 @@ async function obtenerCanal(channelId) {
         }
       }
     }
-    
+
     return canal;
   } catch (err) {
     console.error(`Error al obtener canal/hilo ${channelId}:`, err.message);
@@ -114,14 +133,14 @@ async function obtenerCanal(channelId) {
 // ===== FUNCION PARA ENVIAR TABLERO AUTOMATICO =====
 async function enviarTableroAutomatico() {
   const data = loadData();
-  
+
   const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
   const guildStaff = client.guilds.cache.get(GUILD_STAFF);
-  
+
   const canalPrincipal = guildPrincipal?.channels.cache.get(CANAL_PRINCIPAL);
   const canalStaff = guildStaff?.channels.cache.get(CANAL_STAFF);
   const canalFinDia = guildPrincipal?.channels.cache.get(CANAL_FIN_DIA);
-  
+
   if (!canalPrincipal || !canalStaff) {
     console.log('Canales no disponibles para envio automatico');
     return;
@@ -132,56 +151,57 @@ async function enviarTableroAutomatico() {
 
   if (canalFinDia && canalFinDia.isTextBased()) {
     const embedFinDia = new EmbedBuilder()
-      .setColor(0x1B4332)
+      .setColor(0x8B0000)
       .setDescription(`Fin del dia ${fechaNY}`);
-    
+
     await canalFinDia.send({ embeds: [embedFinDia] });
   }
 
   const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
     const member = guildPrincipal?.members.cache.get(id);
+    const rango = member ? obtenerRango(member) : 'PVT';
     const nombre = member ? member.displayName || member.user.username : 'Desconocido';
     const posicion = (index + 1).toString().padStart(2, '0');
-    const barra = '▬'.repeat(Math.min(Math.floor(efectividades / 5) + 1, 15));
-    return `\`${posicion}\` ${nombre} ${barra} ${efectividades}`;
+    return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + efectividades;
   });
 
   const embedPrincipal = new EmbedBuilder()
-    .setColor(0x1B4332)
+    .setColor(0x8B0000)
     .setTitle('EFECTIVIDADES DEL DIA')
     .setDescription(lineasPrincipal.join('\n') || 'Sin registros disponibles')
-    .setFooter({ text: `${fechaNY} | Cierre automatico` });
+    .setFooter({ text: fechaNY + ' | Cierre automatico' });
 
   const lineasStaff = rankingOrdenado.map(([id, efectividades], index) => {
     const memberPrincipal = guildPrincipal?.members.cache.get(id);
     const memberStaff = guildStaff?.members.cache.get(id);
+    const rango = memberPrincipal ? obtenerRango(memberPrincipal) : 'PVT';
     const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Desconocido';
     const posicion = (index + 1).toString().padStart(2, '0');
     const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
     const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
     const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
 
-    return `\`${posicion}\` ${nombre}\n` +
-           `Efectividades: ${efectividades} | ${porcentaje}% | ${sincronizacion}`;
+    return '\`' + posicion + '\` ' + rango + ' | ' + nombre + '\n' +
+           'Efectividades: ' + efectividades + ' | ' + porcentaje + '% | ' + sincronizacion;
   });
 
   const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
   const promedio = rankingOrdenado.length > 0 ? (totalEfectividades / rankingOrdenado.length).toFixed(1) : 0;
 
   const embedStaff = new EmbedBuilder()
-    .setColor(0x1B4332)
+    .setColor(0x8B0000)
     .setTitle('EFECTIVIDADES DETALLADAS - STAFF')
     .setDescription(lineasStaff.join('\n\n') || 'Sin registros disponibles')
     .addFields({
       name: 'Resumen',
-      value: `Total: ${totalEfectividades} | Promedio: ${promedio} | Participantes: ${rankingOrdenado.length}`
+      value: 'Total: ' + totalEfectividades + ' | Promedio: ' + promedio + ' | Participantes: ' + rankingOrdenado.length
     })
-    .setFooter({ text: `${fechaNY} | Informacion confidencial` });
+    .setFooter({ text: fechaNY + ' | Informacion confidencial' });
 
   await canalPrincipal.send({ embeds: [embedPrincipal] });
   await canalStaff.send({ embeds: [embedStaff] });
-  
-  console.log(`Tablero automatico enviado: ${fechaNY}`);
+
+  console.log('Tablero automatico enviado: ' + fechaNY);
 }
 
 // ===== SISTEMA DE HORARIO AUTOMATICO =====
@@ -190,55 +210,13 @@ function iniciarHorarioAutomatico() {
     const ahora = new Date();
     const opciones = { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false };
     const horaNY = ahora.toLocaleString('en-US', opciones);
-    
+
     if (horaNY === '00:00') {
       enviarTableroAutomatico();
     }
   }, 60000);
-  
+
   console.log('Sistema de horario automatico activado. Verificando hora NY cada minuto.');
-}
-
-// ===== FUNCION PARA GENERAR INFORME SEMANAL =====
-async function generarInformeSemanal(guild, operativos, observaciones, comandanteId, segundoComandanteId) {
-  await guild.members.fetch();
-  const miembrosConRol = guild.members.cache.filter(m => m.roles.cache.has(ROL_MIEMBROS_INFORME));
-  
-  const listaMiembros = miembrosConRol.map(m => {
-    const rolRango = m.roles.cache.find(r => 
-      ['SS', 'SGT', 'LCPL', 'CPL', 'PFC', 'PVT', 'SPC', 'WO', 'LT', 'CPT', 'MAJ', 'COL'].some(
-        rank => r.name.toUpperCase().includes(rank) || r.name.toUpperCase().startsWith(rank)
-      )
-    );
-    const rango = rolRango ? rolRango.name.split(' ')[0] : 'PVT';
-    return `${rango} | ${m.displayName || m.user.username}`;
-  }).sort().join('\n');
-
-  const hoy = new Date();
-  const diaSemana = hoy.getDay();
-  const diffLunes = hoy.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
-  const lunes = new Date(hoy.setDate(diffLunes));
-  const domingo = new Date(hoy.setDate(lunes.getDate() + 6));
-  
-  const fechaInicio = lunes.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
-  const fechaFin = domingo.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
-
-  const embed = new EmbedBuilder()
-    .setColor(0x1B4332)
-    .setTitle(`Informe de la semana (${fechaInicio} - ${fechaFin})`)
-    .setDescription(
-      `## Comandantes:\n\n` +
-      `**Comandante:** <@${comandanteId}>\n` +
-      `**Segundo Comandante:** <@${segundoComandanteId}>\n` +
-      `------------------------------------\n\n` +
-      `- **Operativos realizados durante la semana**: ${operativos}\n\n` +
-      `- **Observaciones**: ${observaciones}\n\n` +
-      `__**Conteo de miembros**__\n\n` +
-      `${listaMiembros || 'No hay miembros registrados con el rol especificado.'}\n\n` +
-      `**Responsable**: <@&${ROL_RESPONSABLE_INFORME}> <@${comandanteId}>`
-    );
-
-  return embed;
 }
 
 // ===== COMANDOS =====
@@ -287,50 +265,38 @@ const commands = [
     .setName('siacepto')
     .setDescription('Aceptar terminos y recibir guia TS3 Android'),
 
-  // ===== ADVERTENCIAS =====
   new SlashCommandBuilder()
-    .setName('adv')
-    .setDescription('Enviar advertencia al hilo principal')
-    .addUserOption(o => o.setName('nombre').setDescription('Usuario a advertir').setRequired(true))
-    .addStringOption(o => o.setName('razon').setDescription('Razon de la advertencia').setRequired(true))
-    .addStringOption(o => o.setName('conteo').setDescription('Conteo de advertencias (ej: 1/2)').setRequired(true))
-    .addUserOption(o => o.setName('firma').setDescription('Responsable de la advertencia').setRequired(true)),
+    .setName('rolests3')
+    .setDescription('Tutorial basico de TS3'),
 
   new SlashCommandBuilder()
-    .setName('adv2')
-    .setDescription('Enviar advertencia al hilo secundario')
-    .addUserOption(o => o.setName('nombre').setDescription('Usuario a advertir').setRequired(true))
-    .addStringOption(o => o.setName('razon').setDescription('Razon de la advertencia').setRequired(true))
-    .addStringOption(o => o.setName('conteo').setDescription('Conteo de advertencias (ej: 1/2)').setRequired(true))
-    .addUserOption(o => o.setName('firma').setDescription('Responsable de la advertencia').setRequired(true)),
-
-  // ===== REGISTROS =====
-  new SlashCommandBuilder()
-    .setName('registro')
-    .setDescription('Enviar registro de cambio de rol al hilo principal')
-    .addUserOption(o => o.setName('nombre').setDescription('Usuario afectado').setRequired(true))
-    .addStringOption(o => o.setName('razon').setDescription('Razon del cambio').setRequired(true))
-    .addRoleOption(o => o.setName('retira').setDescription('Rol que se retira').setRequired(true))
-    .addRoleOption(o => o.setName('concede').setDescription('Rol que se concede').setRequired(true))
-    .addUserOption(o => o.setName('firma').setDescription('Responsable del registro').setRequired(true)),
+    .setName('res')
+    .setDescription('Agregar punto por ticket atendido')
+    .addUserOption(o => o.setName('usuario').setDescription('Usuario que atendio el ticket').setRequired(true)),
 
   new SlashCommandBuilder()
-    .setName('registro2')
-    .setDescription('Enviar registro de cambio de rol al hilo secundario')
-    .addUserOption(o => o.setName('nombre').setDescription('Usuario afectado').setRequired(true))
-    .addStringOption(o => o.setName('razon').setDescription('Razon del cambio').setRequired(true))
-    .addRoleOption(o => o.setName('retira').setDescription('Rol que se retira').setRequired(true))
-    .addRoleOption(o => o.setName('concede').setDescription('Rol que se concede').setRequired(true))
-    .addUserOption(o => o.setName('firma').setDescription('Responsable del registro').setRequired(true)),
+    .setName('resta')
+    .setDescription('Mostrar tablero de puntos de tickets'),
 
-  // ===== INFORME SEMANAL =====
   new SlashCommandBuilder()
-    .setName('informe')
-    .setDescription('Generar y enviar informe semanal al hilo de foro')
-    .addStringOption(o => o.setName('operativos').setDescription('Operativos realizados durante la semana').setRequired(true))
-    .addStringOption(o => o.setName('observaciones').setDescription('Observaciones de la semana').setRequired(true))
-    .addUserOption(o => o.setName('comandante').setDescription('Comandante responsable').setRequired(true))
-    .addUserOption(o => o.setName('segundo').setDescription('Segundo comandante').setRequired(true))
+    .setName('anuncios')
+    .setDescription('Enviar anuncio al canal de anuncios')
+    .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('anunciosls1')
+    .setDescription('Enviar anuncio al canal LS1')
+    .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('anunciosls2')
+    .setDescription('Enviar anuncio al canal LS2')
+    .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('anunciosch')
+    .setDescription('Enviar anuncio al canal CH')
+    .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true))
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR COMANDOS =====
@@ -359,6 +325,7 @@ client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
   const data = loadData();
+  const ticketsData = loadTickets();
   const userId = interaction.user.id;
 
   try {
@@ -380,9 +347,12 @@ client.on('interactionCreate', async interaction => {
       data[usuario.id] += cantidad;
       saveData(data);
 
+      const member = interaction.guild?.members.cache.get(usuario.id);
+      const nombreDisplay = member ? member.displayName || member.user.username : usuario.username;
+
       const embed = new EmbedBuilder()
-        .setColor(0x2D5A3D)
-        .setDescription(`Se agregaron ${cantidad} efectividades a ${usuario.username}. Total: ${data[usuario.id]}`);
+        .setColor(0x8B0000)
+        .setDescription('Se agregaron ' + cantidad + ' efectividades a ' + nombreDisplay + '. Total: ' + data[usuario.id]);
 
       return interaction.reply({ embeds: [embed] });
     }
@@ -405,9 +375,12 @@ client.on('interactionCreate', async interaction => {
       if (data[usuario.id] < 0) data[usuario.id] = 0;
       saveData(data);
 
+      const member = interaction.guild?.members.cache.get(usuario.id);
+      const nombreDisplay = member ? member.displayName || member.user.username : usuario.username;
+
       const embed = new EmbedBuilder()
-        .setColor(0x2D5A3D)
-        .setDescription(`Se retiraron ${cantidad} efectividades a ${usuario.username}. Total: ${data[usuario.id]}`);
+        .setColor(0x8B0000)
+        .setDescription('Se retiraron ' + cantidad + ' efectividades a ' + nombreDisplay + '. Total: ' + data[usuario.id]);
 
       return interaction.reply({ embeds: [embed] });
     }
@@ -421,9 +394,9 @@ client.on('interactionCreate', async interaction => {
       const efectividades = data[userId] || 0;
 
       const embed = new EmbedBuilder()
-        .setColor(0x2D5A3D)
-        .setTitle('Consulta de Efectividades')
-        .setDescription(`Usuario: ${interaction.user.username}\nEfectividades actuales: ${efectividades}`);
+        .setColor(0x8B0000)
+        .setTitle('CONSULTA DE EFECTIVIDADES')
+        .setDescription('Usuario: ' + interaction.user.username + '\nEfectividades actuales: ' + efectividades);
 
       return interaction.reply({ embeds: [embed], ephemeral: true });
     }
@@ -445,43 +418,44 @@ client.on('interactionCreate', async interaction => {
 
       const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
         const member = guildPrincipal?.members.cache.get(id);
+        const rango = member ? obtenerRango(member) : 'PVT';
         const nombre = member ? member.displayName || member.user.username : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
-        const barra = '▬'.repeat(Math.min(Math.floor(efectividades / 5) + 1, 15));
-        return `\`${posicion}\` ${nombre} ${barra} ${efectividades}`;
+        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + efectividades;
       });
 
       const embedPrincipal = new EmbedBuilder()
-        .setColor(0x1B4332)
+        .setColor(0x8B0000)
         .setTitle('EFECTIVIDADES DEL DIA')
         .setDescription(lineasPrincipal.join('\n') || 'Sin registros disponibles')
-        .setFooter({ text: `${fechaHoy} | Generado por ${interaction.user.username}` });
+        .setFooter({ text: fechaHoy + ' | Generado por ' + interaction.user.username });
 
       const lineasStaff = rankingOrdenado.map(([id, efectividades], index) => {
         const memberPrincipal = guildPrincipal?.members.cache.get(id);
         const memberStaff = guildStaff?.members.cache.get(id);
+        const rango = memberPrincipal ? obtenerRango(memberPrincipal) : 'PVT';
         const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
         const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
         const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
         const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
 
-        return `\`${posicion}\` ${nombre}\n` +
-               `Efectividades: ${efectividades} | ${porcentaje}% | ${sincronizacion}`;
+        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + '\n' +
+               'Efectividades: ' + efectividades + ' | ' + porcentaje + '% | ' + sincronizacion;
       });
 
       const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
       const promedio = rankingOrdenado.length > 0 ? (totalEfectividades / rankingOrdenado.length).toFixed(1) : 0;
 
       const embedStaff = new EmbedBuilder()
-        .setColor(0x1B4332)
+        .setColor(0x8B0000)
         .setTitle('EFECTIVIDADES DETALLADAS - STAFF')
         .setDescription(lineasStaff.join('\n\n') || 'Sin registros disponibles')
         .addFields({
           name: 'Resumen',
-          value: `Total: ${totalEfectividades} | Promedio: ${promedio} | Participantes: ${rankingOrdenado.length}`
+          value: 'Total: ' + totalEfectividades + ' | Promedio: ' + promedio + ' | Participantes: ' + rankingOrdenado.length
         })
-        .setFooter({ text: `${fechaHoy} | Generado por ${interaction.user.tag}` });
+        .setFooter({ text: fechaHoy + ' | Generado por ' + interaction.user.tag });
 
       let enviadoPrincipal = false;
       let enviadoStaff = false;
@@ -503,7 +477,7 @@ client.on('interactionCreate', async interaction => {
       if (!enviadoStaff) mensajes.push('Fallo al publicar en canal de Staff');
 
       const embedConfirmacion = new EmbedBuilder()
-        .setColor(0x2D5A3D)
+        .setColor(0x8B0000)
         .setDescription(mensajes.join('\n'));
 
       return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
@@ -522,8 +496,8 @@ client.on('interactionCreate', async interaction => {
       saveData(data);
 
       const embed = new EmbedBuilder()
-        .setColor(0x2D5A3D)
-        .setTitle('Reinicio Completado')
+        .setColor(0x8B0000)
+        .setTitle('REINICIO COMPLETADO')
         .setDescription('Todos los registros han sido restablecidos a cero. El sistema esta listo para nueva acumulacion.');
 
       return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -536,8 +510,8 @@ client.on('interactionCreate', async interaction => {
       }
 
       const embed = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Terminos y Condiciones - TS3')
+        .setColor(0x8B0000)
+        .setTitle('TERMINOS Y CONDICIONES - TS3')
         .setDescription(
           'Al aceptar la cuenta de TS3 estas obligado a seguir estos terminos y condiciones. El incumplimiento resultara en veto de la faccion y posibles sanciones adicionales.\n\n' +
           'Restricciones:\n' +
@@ -558,28 +532,28 @@ client.on('interactionCreate', async interaction => {
       }
 
       const embedDescarga = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Descarga de TS3 para PC')
+        .setColor(0x8B0000)
+        .setTitle('DESCARGA DE TS3 PARA PC')
         .setDescription('https://www.teamspeak.com/en/downloads/#ts3client');
 
       const embedGuia1 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Proceso de Registro - Imagen 1')
+        .setColor(0x8B0000)
+        .setTitle('PROCESO DE REGISTRO - IMAGEN 1')
         .setImage('https://images-ext-1.discordapp.net/external/hKs4ua6_y46K-SJdjgSS2beO6PT21-musbkcZCRHPDE/https/cdn.nekotina.com/guilds/1203420760467832923/3bf1e200-4d80-4ad2-acfc-eb7ba57315b0.jpg?format=webp');
 
       const embedGuia2 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Proceso de Registro - Imagen 2')
+        .setColor(0x8B0000)
+        .setTitle('PROCESO DE REGISTRO - IMAGEN 2')
         .setImage('https://images-ext-1.discordapp.net/external/C2p2PuAsqPDnkCwLX6CizbYAx8x5_9V-Reex7aAFyxQ/https/cdn.nekotina.com/guilds/1203420760467832923/1ca176e1-a55a-4294-b290-307fbef8c4fc.jpg?format=webp');
 
       const embedPaso1 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Configuracion: Herramientas > Opciones')
+        .setColor(0x8B0000)
+        .setTitle('CONFIGURACION: HERRAMIENTAS > OPCIONES')
         .setImage('https://media.discordapp.net/attachments/1481019380103119081/1481021781086306457/TeamSpeak_3_30_09_2025_17_15_54.png?ex=69f8fd84&is=69f7ac04&hm=2909c47dd36047995750173867867b4828bccdfd943d82cafa111b22756b385b&=&format=webp&quality=lossless');
 
       const embedPaso2 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Configuracion: Asignar tecla para hablar')
+        .setColor(0x8B0000)
+        .setTitle('CONFIGURACION: ASIGNAR TECLA PARA HABLAR')
         .setImage('https://media.discordapp.net/attachments/1481019380103119081/1481021815357968427/TeamSpeak_3_30_09_2025_17_17_39.png?ex=69f8fd8c&is=69f7ac0c&hm=31c2d4baf74e2a426f1531662cb3df725573c10b8dda90a8a2733c03ee8beb12&=&format=webp&quality=lossless');
 
       await interaction.reply({ content: 'Guia de instalacion TS3 para PC:', embeds: [embedDescarga] });
@@ -598,8 +572,8 @@ client.on('interactionCreate', async interaction => {
       }
 
       const embedPrincipal = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Macros-android')
+        .setColor(0x8B0000)
+        .setTitle('MACROS-ANDROID')
         .setDescription(
           'A continuacion se te presentan 20 macros diferentes, con roles completos, para cualquier tipo de situaciones en patrullajes.\n\n' +
           'Explorador de archivos usado en el video: https://play.google.com/store/apps/details?id=ru.zdevs.zarchiver\n\n' +
@@ -607,33 +581,33 @@ client.on('interactionCreate', async interaction => {
         );
 
       const embedNota1 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Nota 1')
+        .setColor(0x8B0000)
+        .setTitle('NOTA 1')
         .setDescription('Una vez aplicado el mas macros activar el apartado: (Monetloader) tener activado antes de descargar y colocar dicho archivo.');
 
       const embedNota2 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Nota 2')
+        .setColor(0x8B0000)
+        .setTitle('NOTA 2')
         .setDescription('Antes de colocar dichas macros asegurarse de no tener otro archivo monetloader, en uso, pues este archivo contiene para poder crashear el APK para evitar el uso de cheats o ventajas que te de otro archivo monetloader.');
 
       const embedNota3 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Nota 3')
+        .setColor(0x8B0000)
+        .setTitle('NOTA 3')
         .setDescription('Para agregar macros puedes usar el comando (/cmdhm) y con este mismo se habren dicho apartados para agregar hasta 45 tipos de macros diferentes.');
 
       const embedNota4 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Nota 4')
+        .setColor(0x8B0000)
+        .setTitle('NOTA 4')
         .setDescription('Las macros o el archivo monetloader ya tiene un sistema de renderizado, FOV y el aspect ratio este ultimo sirve para estirar la pantalla no se recomienda estirar mucho ya que se bajaran tus posibilidades de abrir fuegos contra ciudadanos en dicho caso.');
 
       const embedVideo = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Video explicativo de como se ponen en android')
+        .setColor(0x8B0000)
+        .setTitle('VIDEO EXPLICATIVO DE COMO SE PONEN EN ANDROID')
         .setDescription('https://youtube.com/shorts/bU0KblaBXOM?feature=share');
 
       const embedArchivo = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Archivo necesario')
+        .setColor(0x8B0000)
+        .setTitle('ARCHIVO NECESARIO')
         .setDescription('https://www.mediafire.com/file/2hypm27ga94jo46/monetloader+(1).7z/file');
 
       await interaction.reply({ content: 'Paquete de macros para Android:', embeds: [embedPrincipal] });
@@ -654,23 +628,23 @@ client.on('interactionCreate', async interaction => {
       }
 
       const embedMacros = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Macros Actualizadas para PC')
+        .setColor(0x8B0000)
+        .setTitle('MACROS ACTUALIZADAS PARA PC')
         .setDescription('https://www.mediafire.com/file/u8q6bferz6igasf/Macros_USMC_Logistica_v9.pdf/file');
 
       const embedArchivo = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Archivo de Roles y Macros')
+        .setColor(0x8B0000)
+        .setTitle('ARCHIVO DE ROLES Y MACROS')
         .setDescription('https://www.mediafire.com/file/ysctncbpyxum385/LUA_Macros_V2.zip/file');
 
       const embedTutorial = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Tutorial de Instalacion')
+        .setColor(0x8B0000)
+        .setTitle('TUTORIAL DE INSTALACION')
         .setDescription('https://youtu.be/NLNJ3AZ-X2Y');
 
       const embedVideo = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Video Explicativo - Macros en el Juego')
+        .setColor(0x8B0000)
+        .setTitle('VIDEO EXPLICATIVO - MACROS EN EL JUEGO')
         .setDescription('https://youtu.be/6yEqI8ML4eY');
 
       await interaction.reply({ content: 'Recursos para PC:', embeds: [embedMacros] });
@@ -681,238 +655,214 @@ client.on('interactionCreate', async interaction => {
       return;
     }
 
-    // ===== ADV =====
-    if (interaction.commandName === 'adv') {
-      if (!tieneAlgunRol(interaction.member, ROLES_REGISTRO)) {
+    // ===== ROLESTS3 =====
+    if (interaction.commandName === 'rolests3') {
+      if (!tieneAlgunRol(interaction.member, ROLES_ROLESTS3)) {
         return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
-      const nombre = interaction.options.getUser('nombre');
-      const razon = interaction.options.getString('razon');
-      const conteo = interaction.options.getString('conteo');
-      const firma = interaction.options.getUser('firma');
+      const embed1 = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setTitle('TUTORIAL BASICO')
+        .setDescription(
+          '1. Ingresar a ts.newgamers.es, al conectarse exitosamente el Bot te enviara un MD pidiendo que te autentifiques.'
+        )
+        .setImage('https://media.discordapp.net/attachments/864728647151648778/1495585827789733898/image.png?ex=69fc8917&is=69fb3797&hm=aeadb9c244c77f574018b969e64920c18fb3c2b2c9d9be13d67b0824d210abec&=&format=webp&quality=lossless');
 
-      const canalAdv = await obtenerCanal(HILO_ADV);
+      const embed2 = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setDescription(
+          '2. Entra a https://discord.com/channels/864709717979562014/864728343088988171 y utiliza /autentificar, copia ese codigo, lo necesitaras pronto.'
+        )
+        .setImage('https://media.discordapp.net/attachments/864728647151648778/1495586127204319242/image.png?ex=69fc895f&is=69fb37df&hm=e00b4c834041570efe5ea0fcffd026e4a8d3e8bc4430ef4509903c9390746f16&=&format=webp&quality=lossless');
 
-      if (!canalAdv) {
-        return interaction.reply({ content: 'No se pudo acceder al hilo de advertencias. Verifique que el bot tenga permisos en el hilo.', ephemeral: true });
+      const embed3 = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setDescription(
+          '3. Pega ese codigo al MD del Bot, fin del tutorial; simplemente ponte a patrullar en los canales correspondiente a tu faccion.'
+        )
+        .setImage('https://media.discordapp.net/attachments/864728647151648778/1495586281906769960/image.png?ex=69fc8984&is=69fb3804&hm=bf6e6e4cece85a0eae018d7848134e6b188ed7b47e33e5f3eff9890e7f689ebf&=&format=webp&quality=lossless');
+
+      await interaction.reply({ embeds: [embed1] });
+      await interaction.followUp({ embeds: [embed2] });
+      await interaction.followUp({ embeds: [embed3] });
+
+      return;
+    }
+
+    // ===== RES =====
+    if (interaction.commandName === 'res') {
+      if (!tieneAlgunRol(interaction.member, ROLES_RES)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
-      if (!canalAdv.isTextBased()) {
-        return interaction.reply({ content: 'El hilo encontrado no permite mensajes de texto.', ephemeral: true });
+      const usuario = interaction.options.getUser('usuario');
+
+      if (!ticketsData[usuario.id]) ticketsData[usuario.id] = 0;
+      ticketsData[usuario.id] += 1;
+      saveTickets(ticketsData);
+
+      const member = interaction.guild?.members.cache.get(usuario.id);
+      const nombreDisplay = member ? member.displayName || member.user.username : usuario.username;
+
+      const hiloTickets = await obtenerCanal(HILO_TICKETS);
+
+      if (hiloTickets && hiloTickets.isTextBased()) {
+        const embedRegistro = new EmbedBuilder()
+          .setColor(0x8B0000)
+          .setTitle('REGISTRO DE TICKET')
+          .setDescription(
+            'Usuario: ' + nombreDisplay + '\n' +
+            'Atendido por: ' + interaction.user.username + '\n' +
+            'Puntos totales: ' + ticketsData[usuario.id] + '\n' +
+            'Fecha: ' + new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York' })
+          );
+
+        await hiloTickets.send({ embeds: [embedRegistro] });
       }
 
       const embed = new EmbedBuilder()
         .setColor(0x8B0000)
-        .setTitle('Formato de advertencia')
-        .setDescription(
-          `Nombre: ${nombre}\n` +
-          `Razon: ${razon}\n` +
-          `Conteo: ${conteo}\n\n` +
-          `Firma: ${firma}`
-        );
+        .setDescription('Se agrego 1 punto a ' + nombreDisplay + ' por ticket atendido. Total: ' + ticketsData[usuario.id]);
 
-      try {
-        await canalAdv.send({ embeds: [embed] });
-      } catch (sendErr) {
-        console.error('Error enviando al hilo de advertencias:', sendErr);
-        return interaction.reply({ content: 'No se pudo enviar al hilo. Verifica que no este archivado y que el bot tenga permisos.', ephemeral: true });
-      }
-
-      const embedConfirmacion = new EmbedBuilder()
-        .setColor(0x2D5A3D)
-        .setDescription('Advertencia enviada al hilo principal.');
-
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
-    // ===== ADV2 =====
-    if (interaction.commandName === 'adv2') {
-      if (!tieneAlgunRol(interaction.member, ROLES_REGISTRO)) {
+    // ===== RESTA =====
+    if (interaction.commandName === 'resta') {
+      if (!tieneAlgunRol(interaction.member, ROLES_RES)) {
         return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
-
-      const nombre = interaction.options.getUser('nombre');
-      const razon = interaction.options.getString('razon');
-      const conteo = interaction.options.getString('conteo');
-      const firma = interaction.options.getUser('firma');
-
-      const canalAdv2 = await obtenerCanal(HILO_ADV2);
-
-      if (!canalAdv2) {
-        return interaction.reply({ content: 'No se pudo acceder al hilo de advertencias secundario. Verifique que el bot tenga permisos en el hilo.', ephemeral: true });
-      }
-
-      if (!canalAdv2.isTextBased()) {
-        return interaction.reply({ content: 'El hilo encontrado no permite mensajes de texto.', ephemeral: true });
-      }
-
-      const embed = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('Formato de advertencia')
-        .setDescription(
-          `Nombre: ${nombre}\n` +
-          `Razon: ${razon}\n` +
-          `Conteo: ${conteo}\n\n` +
-          `Firma: ${firma}`
-        );
-
-      try {
-        await canalAdv2.send({ embeds: [embed] });
-      } catch (sendErr) {
-        console.error('Error enviando al hilo de advertencias 2:', sendErr);
-        return interaction.reply({ content: 'No se pudo enviar al hilo. Verifica que no este archivado y que el bot tenga permisos.', ephemeral: true });
-      }
-
-      const embedConfirmacion = new EmbedBuilder()
-        .setColor(0x2D5A3D)
-        .setDescription('Advertencia enviada al hilo secundario.');
-
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
-    }
-
-    // ===== REGISTRO =====
-    if (interaction.commandName === 'registro') {
-      if (!tieneAlgunRol(interaction.member, ROLES_REGISTRO)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
-      }
-
-      const nombre = interaction.options.getUser('nombre');
-      const razon = interaction.options.getString('razon');
-      const retira = interaction.options.getRole('retira');
-      const concede = interaction.options.getRole('concede');
-      const firma = interaction.options.getUser('firma');
-
-      const canalRegistro = await obtenerCanal(HILO_REGISTRO);
-
-      if (!canalRegistro) {
-        return interaction.reply({ content: 'No se pudo acceder al hilo de registro. Verifique que el bot tenga permisos en el hilo.', ephemeral: true });
-      }
-
-      if (!canalRegistro.isTextBased()) {
-        return interaction.reply({ content: 'El hilo encontrado no permite mensajes de texto.', ephemeral: true });
-      }
-
-      const embed = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Formato de registro')
-        .setDescription(
-          `Nombre: ${nombre}\n\n` +
-          `Razon: ${razon}\n\n` +
-          `Se le retira: ${retira}\n\n` +
-          `Se le concede: ${concede}\n\n` +
-          `Firma del responsable: ${firma}`
-        );
-
-      try {
-        await canalRegistro.send({ embeds: [embed] });
-      } catch (sendErr) {
-        console.error('Error enviando al hilo de registro:', sendErr);
-        return interaction.reply({ content: 'No se pudo enviar al hilo. Verifica que no este archivado y que el bot tenga permisos.', ephemeral: true });
-      }
-
-      const embedConfirmacion = new EmbedBuilder()
-        .setColor(0x2D5A3D)
-        .setDescription('Registro enviado al hilo principal.');
-
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
-    }
-
-    // ===== REGISTRO2 =====
-    if (interaction.commandName === 'registro2') {
-      if (!tieneAlgunRol(interaction.member, ROLES_REGISTRO)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
-      }
-
-      const nombre = interaction.options.getUser('nombre');
-      const razon = interaction.options.getString('razon');
-      const retira = interaction.options.getRole('retira');
-      const concede = interaction.options.getRole('concede');
-      const firma = interaction.options.getUser('firma');
-
-      const canalRegistro2 = await obtenerCanal(HILO_REGISTRO2);
-
-      if (!canalRegistro2) {
-        return interaction.reply({ content: 'No se pudo acceder al hilo de registro secundario. Verifique que el bot tenga permisos en el hilo.', ephemeral: true });
-      }
-
-      if (!canalRegistro2.isTextBased()) {
-        return interaction.reply({ content: 'El hilo encontrado no permite mensajes de texto.', ephemeral: true });
-      }
-
-      const embed = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Formato de registro')
-        .setDescription(
-          `Nombre: ${nombre}\n\n` +
-          `Razon: ${razon}\n\n` +
-          `Se le retira: ${retira}\n\n` +
-          `Se le concede: ${concede}\n\n` +
-          `Firma del responsable: ${firma}`
-        );
-
-      try {
-        await canalRegistro2.send({ embeds: [embed] });
-      } catch (sendErr) {
-        console.error('Error enviando al hilo de registro 2:', sendErr);
-        return interaction.reply({ content: 'No se pudo enviar al hilo. Verifica que no este archivado y que el bot tenga permisos.', ephemeral: true });
-      }
-
-      const embedConfirmacion = new EmbedBuilder()
-        .setColor(0x2D5A3D)
-        .setDescription('Registro enviado al hilo secundario.');
-
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
-    }
-
-    // ===== INFORME =====
-    if (interaction.commandName === 'informe') {
-      // SOLO estos 2 roles pueden usar /informe
-      if (!tieneAlgunRol(interaction.member, ROLES_INFORME)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
-      }
-
-      const operativos = interaction.options.getString('operativos');
-      const observaciones = interaction.options.getString('observaciones');
-      const comandante = interaction.options.getUser('comandante');
-      const segundo = interaction.options.getUser('segundo');
 
       const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
-      
-      if (!guildPrincipal) {
-        return interaction.reply({ content: 'No se pudo acceder al servidor principal.', ephemeral: true });
+      const rankingOrdenado = Object.entries(ticketsData).sort((a, b) => b[1] - a[1]);
+      const fechaHoy = new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+      const lineas = rankingOrdenado.map(([id, puntos], index) => {
+        const member = guildPrincipal?.members.cache.get(id);
+        const rango = member ? obtenerRango(member) : 'PVT';
+        const nombre = member ? member.displayName || member.user.username : 'Desconocido';
+        const posicion = (index + 1).toString().padStart(2, '0');
+        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + puntos;
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setTitle('TOP DE PUNTOS - TICKETS')
+        .setDescription(lineas.join('\n') || 'Sin registros disponibles')
+        .setFooter({ text: fechaHoy + ' | Generado por ' + interaction.user.username });
+
+      return interaction.reply({ embeds: [embed] });
+    }
+
+    // ===== ANUNCIOS =====
+    if (interaction.commandName === 'anuncios') {
+      if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
-      const embedInforme = await generarInformeSemanal(
-        guildPrincipal, 
-        operativos, 
-        observaciones, 
-        comandante.id, 
-        segundo.id
-      );
+      const texto = interaction.options.getString('texto');
+      const canal = await obtenerCanal(CANAL_ANUNCIOS);
 
-      const canalInforme = await obtenerCanal(HILO_INFORME);
-
-      if (!canalInforme) {
-        return interaction.reply({ content: 'No se pudo acceder al hilo de informes. Verifique que el bot tenga permisos en el hilo.', ephemeral: true });
+      if (!canal || !canal.isTextBased()) {
+        return interaction.reply({ content: 'No se pudo acceder al canal de anuncios.', ephemeral: true });
       }
 
-      if (!canalInforme.isTextBased()) {
-        return interaction.reply({ content: 'El hilo encontrado no permite mensajes de texto.', ephemeral: true });
-      }
+      const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
 
-      try {
-        await canalInforme.send({ embeds: [embedInforme] });
-      } catch (sendErr) {
-        console.error('Error enviando informe al hilo:', sendErr);
-        return interaction.reply({ content: 'No se pudo enviar al hilo. Verifica que no este archivado y que el bot tenga permisos.', ephemeral: true });
-      }
+      const embed = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setDescription(textoFormateado);
 
-      const miembrosCount = guildPrincipal.members.cache.filter(m => m.roles.cache.has(ROL_MIEMBROS_INFORME)).size;
+      await canal.send({ embeds: [embed] });
 
       const embedConfirmacion = new EmbedBuilder()
-        .setColor(0x2D5A3D)
-        .setDescription(`Informe semanal enviado al hilo de foro. Se listaron ${miembrosCount} miembros.`);
+        .setColor(0x8B0000)
+        .setDescription('Anuncio enviado correctamente.');
+
+      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+    }
+
+    // ===== ANUNCIOSLS1 =====
+    if (interaction.commandName === 'anunciosls1') {
+      if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+      }
+
+      const texto = interaction.options.getString('texto');
+      const canal = await obtenerCanal(CANAL_ANUNCIOS_LS);
+
+      if (!canal || !canal.isTextBased()) {
+        return interaction.reply({ content: 'No se pudo acceder al canal.', ephemeral: true });
+      }
+
+      const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
+
+      const embed = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setDescription(textoFormateado);
+
+      await canal.send({ embeds: [embed] });
+
+      const embedConfirmacion = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setDescription('Anuncio enviado a LS1 correctamente.');
+
+      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+    }
+
+    // ===== ANUNCIOSLS2 =====
+    if (interaction.commandName === 'anunciosls2') {
+      if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+      }
+
+      const texto = interaction.options.getString('texto');
+      const canal = await obtenerCanal(CANAL_ANUNCIOS_LS);
+
+      if (!canal || !canal.isTextBased()) {
+        return interaction.reply({ content: 'No se pudo acceder al canal.', ephemeral: true });
+      }
+
+      const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
+
+      const embed = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setDescription(textoFormateado);
+
+      await canal.send({ embeds: [embed] });
+
+      const embedConfirmacion = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setDescription('Anuncio enviado a LS2 correctamente.');
+
+      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+    }
+
+    // ===== ANUNCIOSCH =====
+    if (interaction.commandName === 'anunciosch') {
+      if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+      }
+
+      const texto = interaction.options.getString('texto');
+      const canal = await obtenerCanal(CANAL_ANUNCIOS_CH);
+
+      if (!canal || !canal.isTextBased()) {
+        return interaction.reply({ content: 'No se pudo acceder al canal.', ephemeral: true });
+      }
+
+      const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
+
+      const embed = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setDescription(textoFormateado);
+
+      await canal.send({ embeds: [embed] });
+
+      const embedConfirmacion = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setDescription('Anuncio enviado a CH correctamente.');
 
       return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
     }
@@ -924,51 +874,51 @@ client.on('interactionCreate', async interaction => {
       }
 
       const embedInstalacion = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Instalacion de TS3 en Android - Paso 1')
+        .setColor(0x8B0000)
+        .setTitle('INSTALACION DE TS3 EN ANDROID - PASO 1')
         .setDescription('Seleccionar "continue without logging in" para iniciar sin credenciales personales.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029507519840257/IMG-20251112-WA0000.jpg');
 
       const embedPaso2 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Paso 2 - Anadir servidor')
+        .setColor(0x8B0000)
+        .setTitle('PASO 2 - ANADIR SERVIDOR')
         .setDescription('Localizar la opcion para agregar un nuevo servidor.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029508036001873/IMG-20251112-WA0001.jpg');
 
       const embedPaso3 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Paso 3 - Configuracion de datos')
+        .setColor(0x8B0000)
+        .setTitle('PASO 3 - CONFIGURACION DE DATOS')
         .setDescription('Completar los campos con la informacion proporcionada.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029508543512606/IMG-20251112-WA0003.jpg');
 
       const embedConfig = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Configuracion - Paso 1: Ajustes')
+        .setColor(0x8B0000)
+        .setTitle('CONFIGURACION - PASO 1: AJUSTES')
         .setDescription('Acceder al menu de ajustes de la aplicacion.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035784434323496/IMG-20251112-WA0004.jpg');
 
       const embedConfig2 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Configuracion - Paso 2: Opciones de audio')
+        .setColor(0x8B0000)
+        .setTitle('CONFIGURACION - PASO 2: OPCIONES DE AUDIO')
         .setDescription('Activar Push to talk, superposicion de PTT y manos libres para optimizar la experiencia.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035784832651394/IMG-20251112-WA0005.jpg');
 
       const embedConfig3 = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Configuracion - Paso 3: Sensor de proximidad')
+        .setColor(0x8B0000)
+        .setTitle('CONFIGURACION - PASO 3: SENSOR DE PROXIMIDAD')
         .setDescription('Desactivar el sensor de proximidad para evitar interrupciones.')
         .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035785332031529/IMG-20251112-WA0006.jpg');
 
       const embedCuenta = new EmbedBuilder()
-        .setColor(0x1B4332)
-        .setTitle('Credenciales de acceso - Junior Enlisted')
+        .setColor(0x8B0000)
+        .setTitle('CREDENCIALES DE ACCESO - JUNIOR ENLISTED')
         .setDescription(
-          `Correo: KenwayHaytham005@gmail.com\n` +
-          `Contrasena: UMCSacceso501\n\n` +
+          'Correo: KenwayHaytham005@gmail.com\n' +
+          'Contrasena: UMCSacceso501\n\n' +
           'Advertencia: El uso de estas credenciales implica la aceptacion de los terminos establecidos. Cualquier comparticion no autorizada o modificacion indebida sera sancionada.'
         );
 
-      await interaction.reply({ content: `${interaction.user.username} ha aceptado los terminos. Procediendo con la entrega de credenciales y guia:` });
+      await interaction.reply({ content: interaction.user.username + ' ha aceptado los terminos. Procediendo con la entrega de credenciales y guia:' });
       await interaction.followUp({ embeds: [embedInstalacion] });
       await interaction.followUp({ embeds: [embedPaso2] });
       await interaction.followUp({ embeds: [embedPaso3] });
