@@ -11,7 +11,6 @@ const {
 const fs = require('fs');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
-// ===== PROTECCION ANTI-CRASH =====
 process.on('uncaughtException', err => console.error('ERROR GLOBAL:', err));
 process.on('unhandledRejection', err => console.error('PROMISE ERROR:', err));
 
@@ -22,24 +21,19 @@ const client = new Client({
   ]
 });
 
-// ===== CONFIG =====
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = '1500333360344469524';
 
-// ===== GUILDS Y CANALES =====
 const GUILD_PRINCIPAL = '1123790874741047356';
 const GUILD_STAFF = '1464318287683780836';
-
 const CANAL_PRINCIPAL = '1500533467166015638';
 const CANAL_STAFF = '1500352253293498561';
 const CANAL_FIN_DIA = '1499930571785375744';
 const CANAL_ANUNCIOS = '1499835071245586544';
 const CANAL_ANUNCIOS_LS = '1465188998099243090';
 const CANAL_ANUNCIOS_CH = '1308186822937153546';
-
 const HILO_TICKETS = '1501741776933879859';
 
-// ===== ROLES =====
 const ROLES_STAFF = ['1249089576270696508', '1249089640632422470'];
 const ROL_USUARIO = '1249089172308885576';
 const ROL_ESPECIAL = '1249095569150836781';
@@ -47,7 +41,6 @@ const ROLES_ANUNCIOS = ['1499828342499573970', '1467162969774227713'];
 const ROLES_ROLESTS3 = ['1499828342499573970', '1467162969774227713'];
 const ROLES_RES = ['1499828342499573970', '1467162969774227713'];
 
-// ===== IMAGENES DE SOLDADOS (URLs) =====
 const FOTOS_SOLDADO = {
   'soldado1': 'https://media.discordapp.net/attachments/1500299269855379610/1503540408242802738/8d71445b-3453-4e76-948d-90a2cdb2010b.png?ex=6a03b89f&is=6a02671f&hm=b33e70dab9fefcf078c055aa0844182a609edb8d8dc45bda6bc2cb0896ac63ad&=&format=webp&quality=lossless',
   'soldado2': 'https://media.discordapp.net/attachments/1500299269855379610/1503541583914733628/aa466a4f-4dc0-4d0f-8d18-5e7c686cbc64.png?ex=6a03b9b8&is=6a026838&hm=a95fa74a495adc2a9bbaf2af34ff82899ed7f00469035d1e66c96ad5893e0420&=&format=webp&quality=lossless',
@@ -59,7 +52,6 @@ const FOTOS_SOLDADO = {
   'soldado8': 'https://media.discordapp.net/attachments/1500299269855379610/1503549951886626847/b5a5c496-0ab2-493a-a072-f4baf8fe7a08.png?ex=6a03c183&is=6a027003&hm=9d3d94227af2f912ff864422f71501d1c9b2e70db9fa96513b4132c1943d1fcb&=&format=webp&quality=lossless'
 };
 
-// ===== LOGOS DE REGIMIENTOS (URLs) =====
 const REGIMIENTOS = {
   '3rd_marines': {
     nombre: '3rd Marine Division',
@@ -96,7 +88,6 @@ const REGIMIENTOS = {
 const DATA_FILE = './data.json';
 const TICKETS_FILE = './tickets.json';
 
-// ===== CREAR JSON SI NO EXISTE =====
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, '{}');
   console.log('data.json creado automaticamente');
@@ -107,7 +98,6 @@ if (!fs.existsSync(TICKETS_FILE)) {
   console.log('tickets.json creado automaticamente');
 }
 
-// ===== DATA =====
 function loadData() {
   try {
     return JSON.parse(fs.readFileSync(DATA_FILE));
@@ -136,7 +126,6 @@ function saveTickets(data) {
   fs.writeFileSync(TICKETS_FILE, JSON.stringify(data, null, 2));
 }
 
-// ===== FUNCIONES DE VERIFICACION =====
 function tieneAlgunRol(member, rolesArray) {
   return rolesArray.some(rolId => member.roles.cache.has(rolId));
 }
@@ -172,7 +161,6 @@ async function obtenerCanal(channelId) {
   }
 }
 
-// ===== FUNCION PARA ENVIAR TABLERO AUTOMATICO =====
 async function enviarTableroAutomatico() {
   const data = loadData();
   const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
@@ -201,7 +189,7 @@ async function enviarTableroAutomatico() {
     const rango = member ? obtenerRango(member) : 'PVT';
     const nombre = member ? member.displayName || member.user.username : 'Desconocido';
     const posicion = (index + 1).toString().padStart(2, '0');
-    return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + efectividades;
+    return '`' + posicion + '` ' + rango + ' | ' + nombre + ' = ' + efectividades;
   });
 
   const embedPrincipal = new EmbedBuilder()
@@ -219,7 +207,7 @@ async function enviarTableroAutomatico() {
     const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
     const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
     const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
-    return '\`' + posicion + '\` ' + rango + ' | ' + nombre + '\n' +
+    return '`' + posicion + '` ' + rango + ' | ' + nombre + '\n' +
            'Efectividades: ' + efectividades + ' | ' + porcentaje + '% | ' + sincronizacion;
   });
 
@@ -241,7 +229,6 @@ async function enviarTableroAutomatico() {
   console.log('Tablero automatico enviado: ' + fechaNY);
 }
 
-// ===== SISTEMA DE HORARIO AUTOMATICO =====
 function iniciarHorarioAutomatico() {
   setInterval(() => {
     const ahora = new Date();
@@ -252,9 +239,7 @@ function iniciarHorarioAutomatico() {
     }
   }, 60000);
   console.log('Sistema de horario automatico activado. Verificando hora NY cada minuto.');
-}
-
-// ===== COMANDOS =====
+}// ===== COMANDOS =====
 const commands = [
   new SlashCommandBuilder()
     .setName('agregar')
@@ -333,7 +318,6 @@ const commands = [
     .setDescription('Enviar anuncio al canal CH')
     .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true)),
 
-  // ===== NUEVO COMANDO /CARNET =====
   new SlashCommandBuilder()
     .setName('carnet')
     .setDescription('Generar carnet de identificacion militar')
@@ -472,9 +456,7 @@ client.once('ready', async () => {
   } catch (err) {
     console.error('ERROR REGISTRANDO COMANDOS:', err);
   }
-});
-
-// ===== INTERACCIONES =====
+});// ===== INTERACCIONES =====
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -575,7 +557,7 @@ client.on('interactionCreate', async interaction => {
         const rango = member ? obtenerRango(member) : 'PVT';
         const nombre = member ? member.displayName || member.user.username : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
-        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + efectividades;
+        return '`' + posicion + '` ' + rango + ' | ' + nombre + ' = ' + efectividades;
       });
 
       const embedPrincipal = new EmbedBuilder()
@@ -594,7 +576,7 @@ client.on('interactionCreate', async interaction => {
         const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
         const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
 
-        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + '\n' +
+        return '`' + posicion + '` ' + rango + ' | ' + nombre + '\n' +
                'Efectividades: ' + efectividades + ' | ' + porcentaje + '% | ' + sincronizacion;
       });
 
@@ -897,7 +879,7 @@ client.on('interactionCreate', async interaction => {
         const rango = member ? obtenerRango(member) : 'PVT';
         const nombre = member ? member.displayName || member.user.username : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
-        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + puntos;
+        return '`' + posicion + '` ' + rango + ' | ' + nombre + ' = ' + puntos;
       });
 
       const embed = new EmbedBuilder()
@@ -1317,22 +1299,20 @@ client.on('interactionCreate', async interaction => {
           `**${nombreCompleto.toUpperCase()}**\n` +
           `Rango: **${rango}** (${payGrade})\n` +
           `Unidad: **${regimientoData.nombre}**\n` +
-          `MOS: **${especialidad}**` 
+          `MOS: **${especialidad}**`
         )
         .setImage(`attachment://carnet_${interaction.user.id}.png`)
         .setFooter({ text: `USMC ID: ${interaction.user.id.slice(-8)} | ${fechaIngreso} - ${fechaExpiracion}` });
 
       return interaction.editReply({ embeds: [embed], files: [attachment] });
-
     }
 
   } catch (err) {
     console.error('ERROR:', err);
-
-    if (interaction.replied) {
-      interaction.followUp({ content: 'Se produjo un error en el sistema.', ephemeral: true });
+    if (interaction.replied || interaction.deferred) {
+      interaction.followUp({ content: '❌ Se produjo un error en el sistema.', ephemeral: true });
     } else {
-      interaction.reply({ content: 'Se produjo un error en el sistema.', ephemeral: true });
+      interaction.reply({ content: '❌ Se produjo un error en el sistema.', ephemeral: true });
     }
   }
 });
