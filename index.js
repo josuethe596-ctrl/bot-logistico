@@ -154,16 +154,20 @@ function obtenerRango(member) {
 
 async function obtenerCanal(channelId) {
   try {
-    let canal = await client.channels.fetch(channelId, { force: true });
-    if (canal && canal.isThread && canal.isThread()) {
-      if (canal.archived) {
-        try {
-          await canal.setArchived(false);
-          console.log(`Hilo ${channelId} desarchivado automaticamente`);
-        } catch (archiveErr) {
-          console.warn(`No se pudo desarchivar hilo ${channelId}:`, archiveErr.message);
+    // Primero buscar en caché (rápido)
+    for (const guild of client.guilds.cache.values()) {
+      const canal = guild.channels.cache.get(channelId);
+      if (canal) {
+        if (canal.isThread && canal.isThread() && canal.archived) {
+          try { await canal.setArchived(false); } catch(e) {}
         }
+        return canal;
       }
+    }
+    // Si no está en caché, hacer fetch (lento)
+    let canal = await client.channels.fetch(channelId, { force: false });
+    if (canal && canal.isThread && canal.isThread() && canal.archived) {
+      try { await canal.setArchived(false); } catch(e) {}
     }
     return canal;
   } catch (err) {
@@ -193,7 +197,7 @@ async function enviarTableroAutomatico() {
     const embedFinDia = new EmbedBuilder()
       .setColor(0x8B0000)
       .setDescription(`Fin del dia ${fechaNY}`);
-    await canalFinDia.send({ embeds: [embedFinDia] });
+    await canalFinDia.send({ embeds: [embedFinDia] }).catch(() => {});
   }
 
   const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
@@ -236,8 +240,8 @@ async function enviarTableroAutomatico() {
     })
     .setFooter({ text: fechaNY + ' | Informacion confidencial' });
 
-  await canalPrincipal.send({ embeds: [embedPrincipal] });
-  await canalStaff.send({ embeds: [embedStaff] });
+  await canalPrincipal.send({ embeds: [embedPrincipal] }).catch(e => console.error('Error enviando a principal:', e.message));
+  await canalStaff.send({ embeds: [embedStaff] }).catch(e => console.error('Error enviando a staff:', e.message));
   console.log('Tablero automatico enviado: ' + fechaNY);
 }
 
@@ -333,7 +337,6 @@ const commands = [
     .setDescription('Enviar anuncio al canal CH')
     .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true)),
 
-  // ===== NUEVO COMANDO /CARNET =====
   new SlashCommandBuilder()
     .setName('carnet')
     .setDescription('Generar carnet de identificacion militar')
@@ -474,6 +477,19 @@ client.once('ready', async () => {
   }
 });
 
+// ===== HELPER: Safe Reply =====
+async function safeReply(interaction, options) {
+  try {
+    if (interaction.replied || interaction.deferred) {
+      return await interaction.followUp(options);
+    } else {
+      return await interaction.reply(options);
+    }
+  } catch (err) {
+    console.error('Error en safeReply:', err.message);
+  }
+}
+
 // ===== INTERACCIONES =====
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
@@ -487,14 +503,14 @@ client.on('interactionCreate', async interaction => {
     // ===== AGREGAR =====
     if (interaction.commandName === 'agregar') {
       if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+        return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
       const usuario = interaction.options.getUser('usuario');
       const cantidad = interaction.options.getInteger('cantidad');
 
       if (cantidad <= 0) {
-        return interaction.reply({ content: 'La cantidad debe ser mayor a cero.', ephemeral: true });
+        return safeReply(interaction, { content: 'La cantidad debe ser mayor a cero.', ephemeral: true });
       }
 
       if (!data[usuario.id]) data[usuario.id] = 0;
@@ -508,20 +524,20 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x8B0000)
         .setDescription('Se agregaron ' + cantidad + ' efectividades a ' + nombreDisplay + '. Total: ' + data[usuario.id]);
 
-      return interaction.reply({ embeds: [embed] });
+      return safeReply(interaction, { embeds: [embed] });
     }
 
     // ===== QUITAR =====
     if (interaction.commandName === 'quitar') {
       if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+        return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
       const usuario = interaction.options.getUser('usuario');
       const cantidad = interaction.options.getInteger('cantidad');
 
       if (cantidad <= 0) {
-        return interaction.reply({ content: 'La cantidad debe ser mayor a cero.', ephemeral: true });
+        return safeReply(interaction, { content: 'La cantidad debe ser mayor a cero.', ephemeral: true });
       }
 
       if (!data[usuario.id]) data[usuario.id] = 0;
@@ -536,13 +552,13 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x8B0000)
         .setDescription('Se retiraron ' + cantidad + ' efectividades a ' + nombreDisplay + '. Total: ' + data[usuario.id]);
 
-      return interaction.reply({ embeds: [embed] });
+      return safeReply(interaction, { embeds: [embed] });
     }
 
     // ===== MEP =====
     if (interaction.commandName === 'mep') {
       if (!interaction.member.roles.cache.has(ROL_USUARIO)) {
-        return interaction.reply({ content: 'No tienes permiso para usar este comando.', ephemeral: true });
+        return safeReply(interaction, { content: 'No tienes permiso para usar este comando.', ephemeral: true });
       }
 
       const efectividades = data[userId] || 0;
@@ -552,14 +568,17 @@ client.on('interactionCreate', async interaction => {
         .setTitle('CONSULTA DE EFECTIVIDADES')
         .setDescription('Usuario: ' + interaction.user.username + '\nEfectividades actuales: ' + efectividades);
 
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return safeReply(interaction, { embeds: [embed], ephemeral: true });
     }
 
     // ===== TABLERO =====
     if (interaction.commandName === 'tablero') {
       if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+        return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
+
+      // deferReply porque puede tardar en obtener canales
+      await interaction.deferReply({ ephemeral: true });
 
       const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
       const guildStaff = client.guilds.cache.get(GUILD_STAFF);
@@ -634,13 +653,13 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x8B0000)
         .setDescription(mensajes.join('\n'));
 
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+      return interaction.editReply({ embeds: [embedConfirmacion] });
     }
 
     // ===== RESETS =====
     if (interaction.commandName === 'resets') {
       if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+        return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
       for (const id in data) {
@@ -654,13 +673,13 @@ client.on('interactionCreate', async interaction => {
         .setTitle('REINICIO COMPLETADO')
         .setDescription('Todos los registros han sido restablecidos a cero. El sistema esta listo para nueva acumulacion.');
 
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return safeReply(interaction, { embeds: [embed], ephemeral: true });
     }
 
     // ===== TS3 =====
     if (interaction.commandName === 'ts3') {
       if (!interaction.member.roles.cache.has(ROL_ESPECIAL)) {
-        return interaction.reply({ content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
+        return safeReply(interaction, { content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
       }
 
       const embed = new EmbedBuilder()
@@ -676,13 +695,13 @@ client.on('interactionCreate', async interaction => {
           'Para continuar escribe /siacepto'
         );
 
-      return interaction.reply({ embeds: [embed] });
+      return safeReply(interaction, { embeds: [embed] });
     }
 
     // ===== TS3 PC =====
     if (interaction.commandName === 'ts3pc') {
       if (!interaction.member.roles.cache.has(ROL_ESPECIAL)) {
-        return interaction.reply({ content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
+        return safeReply(interaction, { content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
       }
 
       const embedDescarga = new EmbedBuilder()
@@ -710,7 +729,7 @@ client.on('interactionCreate', async interaction => {
         .setTitle('CONFIGURACION: ASIGNAR TECLA PARA HABLAR')
         .setImage('https://media.discordapp.net/attachments/1481019380103119081/1481021815357968427/TeamSpeak_3_30_09_2025_17_17_39.png?ex=69f8fd8c&is=69f7ac0c&hm=31c2d4baf74e2a426f1531662cb3df725573c10b8dda90a8a2733c03ee8beb12&=&format=webp&quality=lossless');
 
-      await interaction.reply({ content: 'Guia de instalacion TS3 para PC:', embeds: [embedDescarga] });
+      await safeReply(interaction, { content: 'Guia de instalacion TS3 para PC:', embeds: [embedDescarga] });
       await interaction.followUp({ embeds: [embedGuia1] });
       await interaction.followUp({ embeds: [embedGuia2] });
       await interaction.followUp({ embeds: [embedPaso1] });
@@ -722,7 +741,7 @@ client.on('interactionCreate', async interaction => {
     // ===== ANDROID =====
     if (interaction.commandName === 'android') {
       if (!interaction.member.roles.cache.has(ROL_ESPECIAL)) {
-        return interaction.reply({ content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
+        return safeReply(interaction, { content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
       }
 
       const embedPrincipal = new EmbedBuilder()
@@ -764,7 +783,7 @@ client.on('interactionCreate', async interaction => {
         .setTitle('ARCHIVO NECESARIO')
         .setDescription('https://www.mediafire.com/file/2hypm27ga94jo46/monetloader+(1).7z/file');
 
-      await interaction.reply({ content: 'Paquete de macros para Android:', embeds: [embedPrincipal] });
+      await safeReply(interaction, { content: 'Paquete de macros para Android:', embeds: [embedPrincipal] });
       await interaction.followUp({ embeds: [embedNota1] });
       await interaction.followUp({ embeds: [embedNota2] });
       await interaction.followUp({ embeds: [embedNota3] });
@@ -778,7 +797,7 @@ client.on('interactionCreate', async interaction => {
     // ===== PC =====
     if (interaction.commandName === 'pc') {
       if (!interaction.member.roles.cache.has(ROL_ESPECIAL)) {
-        return interaction.reply({ content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
+        return safeReply(interaction, { content: 'No tienes permiso para acceder a esta informacion.', ephemeral: true });
       }
 
       const embedMacros = new EmbedBuilder()
@@ -801,7 +820,7 @@ client.on('interactionCreate', async interaction => {
         .setTitle('VIDEO EXPLICATIVO - MACROS EN EL JUEGO')
         .setDescription('https://youtu.be/6yEqI8ML4eY');
 
-      await interaction.reply({ content: 'Recursos para PC:', embeds: [embedMacros] });
+      await safeReply(interaction, { content: 'Recursos para PC:', embeds: [embedMacros] });
       await interaction.followUp({ embeds: [embedArchivo] });
       await interaction.followUp({ embeds: [embedTutorial] });
       await interaction.followUp({ embeds: [embedVideo] });
@@ -812,7 +831,7 @@ client.on('interactionCreate', async interaction => {
     // ===== ROLESTS3 =====
     if (interaction.commandName === 'rolests3') {
       if (!tieneAlgunRol(interaction.member, ROLES_ROLESTS3)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+        return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
       const embed1 = new EmbedBuilder()
@@ -837,7 +856,7 @@ client.on('interactionCreate', async interaction => {
         )
         .setImage('https://media.discordapp.net/attachments/864728647151648778/1495586281906769960/image.png?ex=69fc8984&is=69fb3804&hm=bf6e6e4cece85a0eae018d7848134e6b188ed7b47e33e5f3eff9890e7f689ebf&=&format=webp&quality=lossless');
 
-      await interaction.reply({ embeds: [embed1] });
+      await safeReply(interaction, { embeds: [embed1] });
       await interaction.followUp({ embeds: [embed2] });
       await interaction.followUp({ embeds: [embed3] });
 
@@ -847,8 +866,11 @@ client.on('interactionCreate', async interaction => {
     // ===== RES =====
     if (interaction.commandName === 'res') {
       if (!tieneAlgunRol(interaction.member, ROLES_RES)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+        return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
+
+      // deferReply porque obtenerCanal puede tardar
+      await interaction.deferReply();
 
       const usuario = interaction.options.getUser('usuario');
 
@@ -872,20 +894,20 @@ client.on('interactionCreate', async interaction => {
             'Fecha: ' + new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York' })
           );
 
-        await hiloTickets.send({ embeds: [embedRegistro] });
+        await hiloTickets.send({ embeds: [embedRegistro] }).catch(() => {});
       }
 
       const embed = new EmbedBuilder()
         .setColor(0x8B0000)
         .setDescription('Se agrego 1 punto a ' + nombreDisplay + ' por ticket atendido. Total: ' + ticketsData[usuario.id]);
 
-      return interaction.reply({ embeds: [embed] });
+      return interaction.editReply({ embeds: [embed] });
     }
 
     // ===== RESTA =====
     if (interaction.commandName === 'resta') {
       if (!tieneAlgunRol(interaction.member, ROLES_RES)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+        return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
       const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
@@ -906,20 +928,23 @@ client.on('interactionCreate', async interaction => {
         .setDescription(lineas.join('\n') || 'Sin registros disponibles')
         .setFooter({ text: fechaHoy + ' | Generado por ' + interaction.user.username });
 
-      return interaction.reply({ embeds: [embed] });
+      return safeReply(interaction, { embeds: [embed] });
     }
 
     // ===== ANUNCIOS =====
     if (interaction.commandName === 'anuncios') {
       if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+        return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
+
+      // deferReply porque obtenerCanal puede tardar
+      await interaction.deferReply({ ephemeral: true });
 
       const texto = interaction.options.getString('texto');
       const canal = await obtenerCanal(CANAL_ANUNCIOS);
 
       if (!canal || !canal.isTextBased()) {
-        return interaction.reply({ content: 'No se pudo acceder al canal de anuncios.', ephemeral: true });
+        return interaction.editReply({ content: 'No se pudo acceder al canal de anuncios.' });
       }
 
       const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
@@ -934,20 +959,22 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x8B0000)
         .setDescription('Anuncio enviado correctamente.');
 
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+      return interaction.editReply({ embeds: [embedConfirmacion] });
     }
 
     // ===== ANUNCIOSLS1 =====
     if (interaction.commandName === 'anunciosls1') {
       if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+        return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
+
+      await interaction.deferReply({ ephemeral: true });
 
       const texto = interaction.options.getString('texto');
       const canal = await obtenerCanal(CANAL_ANUNCIOS_LS);
 
       if (!canal || !canal.isTextBased()) {
-        return interaction.reply({ content: 'No se pudo acceder al canal.', ephemeral: true });
+        return interaction.editReply({ content: 'No se pudo acceder al canal.' });
       }
 
       const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
@@ -962,20 +989,22 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x8B0000)
         .setDescription('Anuncio enviado a LS1 correctamente.');
 
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+      return interaction.editReply({ embeds: [embedConfirmacion] });
     }
 
     // ===== ANUNCIOSLS2 =====
     if (interaction.commandName === 'anunciosls2') {
       if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+        return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
+
+      await interaction.deferReply({ ephemeral: true });
 
       const texto = interaction.options.getString('texto');
       const canal = await obtenerCanal(CANAL_ANUNCIOS_LS);
 
       if (!canal || !canal.isTextBased()) {
-        return interaction.reply({ content: 'No se pudo acceder al canal.', ephemeral: true });
+        return interaction.editReply({ content: 'No se pudo acceder al canal.' });
       }
 
       const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
@@ -990,20 +1019,22 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x8B0000)
         .setDescription('Anuncio enviado a LS2 correctamente.');
 
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+      return interaction.editReply({ embeds: [embedConfirmacion] });
     }
 
     // ===== ANUNCIOSCH =====
     if (interaction.commandName === 'anunciosch') {
       if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
+        return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
+
+      await interaction.deferReply({ ephemeral: true });
 
       const texto = interaction.options.getString('texto');
       const canal = await obtenerCanal(CANAL_ANUNCIOS_CH);
 
       if (!canal || !canal.isTextBased()) {
-        return interaction.reply({ content: 'No se pudo acceder al canal.', ephemeral: true });
+        return interaction.editReply({ content: 'No se pudo acceder al canal.' });
       }
 
       const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
@@ -1018,13 +1049,13 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x8B0000)
         .setDescription('Anuncio enviado a CH correctamente.');
 
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
+      return interaction.editReply({ embeds: [embedConfirmacion] });
     }
 
     // ===== SIACEPTO =====
     if (interaction.commandName === 'siacepto') {
       if (!interaction.member.roles.cache.has(ROL_USUARIO)) {
-        return interaction.reply({ content: 'No tienes permiso para usar este comando.', ephemeral: true });
+        return safeReply(interaction, { content: 'No tienes permiso para usar este comando.', ephemeral: true });
       }
 
       const embedInstalacion = new EmbedBuilder()
@@ -1072,7 +1103,7 @@ client.on('interactionCreate', async interaction => {
           'Advertencia: El uso de estas credenciales implica la aceptacion de los terminos establecidos. Cualquier comparticion no autorizada o modificacion indebida sera sancionada.'
         );
 
-      await interaction.reply({ content: interaction.user.username + ' ha aceptado los terminos. Procediendo con la entrega de credenciales y guia:' });
+      await safeReply(interaction, { content: interaction.user.username + ' ha aceptado los terminos. Procediendo con la entrega de credenciales y guia:' });
       await interaction.followUp({ embeds: [embedInstalacion] });
       await interaction.followUp({ embeds: [embedPaso2] });
       await interaction.followUp({ embeds: [embedPaso3] });
@@ -1087,315 +1118,360 @@ client.on('interactionCreate', async interaction => {
     // ===== CARNET =====
     if (interaction.commandName === 'carnet') {
       if (!interaction.member.roles.cache.has(ROL_USUARIO)) {
-        return interaction.reply({ content: 'No tienes permiso para usar este comando.', ephemeral: true });
+        return safeReply(interaction, { content: 'No tienes permiso para usar este comando.', ephemeral: true });
       }
 
       await interaction.deferReply();
 
-      const nombreCompleto = interaction.options.getString('nombre_completo');
-      const fotoKey = interaction.options.getString('foto_soldado');
-      const rango = interaction.options.getString('rango');
-      const payGrade = interaction.options.getString('pay_grade');
-      const especialidad = interaction.options.getString('especialidad');
-      const regimientoKey = interaction.options.getString('regimiento');
-      const fechaIngreso = interaction.options.getString('fecha_ingreso');
-      const fechaExpiracion = interaction.options.getString('fecha_expiracion');
-
-      const regimientoData = REGIMIENTOS[regimientoKey];
-      const fotoURL = FOTOS_SOLDADO[fotoKey];
-
-      // === GENERAR CANVAS ===
-      const canvas = createCanvas(800, 1200);
-      const ctx = canvas.getContext('2d');
-
-      // 1. FONDO NEGRO
-      ctx.fillStyle = '#0a0a0a';
-      ctx.fillRect(0, 0, 800, 1200);
-
-      // 2. BARRAS ROJAS
-      ctx.fillStyle = '#8B0000';
-      ctx.fillRect(0, 0, 800, 40);
-      ctx.fillRect(0, 1160, 800, 40);
-
-      // 3. ESQUINAS
-      ctx.fillStyle = '#8B0000';
-      [
-        [40, 40, 60], [760, 40, 60],
-        [40, 1160, 60], [760, 1160, 60]
-      ].forEach(([x, y, r]) => {
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-      });
-
-      // 4. MARCO
-      ctx.strokeStyle = '#8B0000';
-      ctx.lineWidth = 4;
-      ctx.strokeRect(30, 30, 740, 1140);
-
-      // 5. ENCABEZADO
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 22px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('UNITED STATES MARINE CORPS', 400, 75);
-      ctx.fillStyle = '#c0c0c0';
-      ctx.font = '16px Arial';
-      ctx.fillText('OFFICIAL IDENTIFICATION CARD', 400, 95);
-
-      // 6. FOTO DEL SOLDADO (desde URL)
       try {
-        const fotoImage = await loadImage(fotoURL);
-        const fotoX = 60, fotoY = 120, fotoW = 280, fotoH = 350;
+        const nombreCompleto = interaction.options.getString('nombre_completo');
+        const fotoKey = interaction.options.getString('foto_soldado');
+        const rango = interaction.options.getString('rango');
+        const payGrade = interaction.options.getString('pay_grade');
+        const especialidad = interaction.options.getString('especialidad');
+        const regimientoKey = interaction.options.getString('regimiento');
+        const fechaIngreso = interaction.options.getString('fecha_ingreso');
+        const fechaExpiracion = interaction.options.getString('fecha_expiracion');
 
-        const ratio = Math.max(fotoW / fotoImage.width, fotoH / fotoImage.height);
-        const shiftX = (fotoW - fotoImage.width * ratio) / 2;
-        const shiftY = (fotoH - fotoImage.height * ratio) / 2;
+        const regimientoData = REGIMIENTOS[regimientoKey];
+        const fotoURL = FOTOS_SOLDADO[fotoKey];
 
-        ctx.drawImage(
-          fotoImage,
-          0, 0, fotoImage.width, fotoImage.height,
-          fotoX + shiftX, fotoY + shiftY,
-          fotoImage.width * ratio, fotoImage.height * ratio
-        );
+        // === GENERAR CANVAS ===
+        const canvas = createCanvas(800, 1200);
+        const ctx = canvas.getContext('2d');
 
-        ctx.strokeStyle = '#D4AF37';
-        ctx.lineWidth = 4;
-        ctx.strokeRect(fotoX, fotoY, fotoW, fotoH);
+        // 1. FONDO NEGRO
+        ctx.fillStyle = '#0a0a0a';
+        ctx.fillRect(0, 0, 800, 1200);
 
-      } catch (imgErr) {
-        console.error('Error foto soldado:', imgErr);
-        ctx.fillStyle = '#333';
-        ctx.fillRect(60, 120, 280, 350);
-        ctx.fillStyle = '#ff4444';
-        ctx.font = 'bold 20px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('IMAGEN NO', 200, 280);
-        ctx.fillText('DISPONIBLE', 200, 310);
-      }
+        // 2. BARRAS ROJAS
+        ctx.fillStyle = '#8B0000';
+        ctx.fillRect(0, 0, 800, 40);
+        ctx.fillRect(0, 1160, 800, 40);
 
-      // 7. NOMBRE
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 26px Arial';
-      ctx.textAlign = 'center';
-      
-      const nombreUpper = nombreCompleto.toUpperCase();
-      const partes = nombreUpper.split(' ');
-      
-      if (nombreUpper.length > 22) {
-        const mitad = Math.ceil(partes.length / 2);
-        ctx.fillText(partes.slice(0, mitad).join(' '), 200, 500);
-        ctx.fillText(partes.slice(mitad).join(' '), 200, 530);
-      } else {
-        ctx.fillText(nombreUpper, 200, 515);
-      }
+        // 3. ESQUINAS
+        ctx.fillStyle = '#8B0000';
+        [
+          [40, 40, 60], [760, 40, 60],
+          [40, 1160, 60], [760, 1160, 60]
+        ].forEach(([x, y, r]) => {
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+        });
 
-      // 8. DATOS DERECHA
-      const xDer = 400;
-      let yPos = 140;
-
-      function dibujarCampo(titulo, valor, color = '#FFD700') {
-        ctx.fillStyle = '#888888';
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillText(titulo.toUpperCase(), xDer, yPos);
-        
-        ctx.fillStyle = color;
-        ctx.font = 'bold 30px Arial';
-        ctx.fillText(valor.toUpperCase(), xDer, yPos + 32);
-        
+        // 4. MARCO
         ctx.strokeStyle = '#8B0000';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(xDer, yPos + 42);
-        ctx.lineTo(740, yPos + 42);
-        ctx.stroke();
+        ctx.lineWidth = 4;
+        ctx.strokeRect(30, 30, 740, 1140);
+
+        // 5. ENCABEZADO
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 22px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('UNITED STATES MARINE CORPS', 400, 75);
+        ctx.fillStyle = '#c0c0c0';
+        ctx.font = '16px Arial';
+        ctx.fillText('OFFICIAL IDENTIFICATION CARD', 400, 95);
+
+        // 6. FOTO DEL SOLDADO (desde URL)
+        try {
+          const fotoImage = await loadImage(fotoURL);
+          const fotoX = 60, fotoY = 120, fotoW = 280, fotoH = 350;
+
+          const ratio = Math.max(fotoW / fotoImage.width, fotoH / fotoImage.height);
+          const shiftX = (fotoW - fotoImage.width * ratio) / 2;
+          const shiftY = (fotoH - fotoImage.height * ratio) / 2;
+
+          ctx.drawImage(
+            fotoImage,
+            0, 0, fotoImage.width, fotoImage.height,
+            fotoX + shiftX, fotoY + shiftY,
+            fotoImage.width * ratio, fotoImage.height * ratio
+          );
+
+          ctx.strokeStyle = '#D4AF37';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(fotoX, fotoY, fotoW, fotoH);
+
+        } catch (imgErr) {
+          console.error('Error foto soldado:', imgErr);
+          ctx.fillStyle = '#333';
+          ctx.fillRect(60, 120, 280, 350);
+          ctx.fillStyle = '#ff4444';
+          ctx.font = 'bold 20px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('IMAGEN NO', 200, 280);
+          ctx.fillText('DISPONIBLE', 200, 310);
+        }
+
+        // 7. NOMBRE
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 26px Arial';
+        ctx.textAlign = 'center';
         
-        yPos += 72;
-      }
+        const nombreUpper = nombreCompleto.toUpperCase();
+        const partes = nombreUpper.split(' ');
+        
+        if (nombreUpper.length > 22) {
+          const mitad = Math.ceil(partes.length / 2);
+          ctx.fillText(partes.slice(0, mitad).join(' '), 200, 500);
+          ctx.fillText(partes.slice(mitad).join(' '), 200, 530);
+        } else {
+          ctx.fillText(nombreUpper, 200, 515);
+        }
 
-      dibujarCampo('RANK', rango);
-      dibujarCampo('PAY GRADE', payGrade);
-      dibujarCampo('MOS / SPECIALTY', especialidad);
-      dibujarCampo('DATE OF ENTRY', fechaIngreso);
-      dibujarCampo('EXPIRATION DATE', fechaExpiracion, '#ff6666');
-      dibujarCampo('UNIT / REGIMENT', regimientoData.abreviatura, '#ffffff');
+        // 8. DATOS DERECHA
+        const xDer = 400;
+        let yPos = 140;
 
-      // 9. SEMPER FIDELIS
-      ctx.save();
-      ctx.translate(22, 720);
-      ctx.rotate(-Math.PI / 2);
-      ctx.fillStyle = '#8B0000';
-      ctx.font = 'bold 36px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('SEMPER FIDELIS', 0, 0);
-      ctx.restore();
+        function dibujarCampo(titulo, valor, color = '#FFD700') {
+          ctx.fillStyle = '#888888';
+          ctx.font = 'bold 16px Arial';
+          ctx.textAlign = 'left';
+          ctx.fillText(titulo.toUpperCase(), xDer, yPos);
+          
+          ctx.fillStyle = color;
+          ctx.font = 'bold 30px Arial';
+          ctx.fillText(valor.toUpperCase(), xDer, yPos + 32);
+          
+          ctx.strokeStyle = '#8B0000';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(xDer, yPos + 42);
+          ctx.lineTo(740, yPos + 42);
+          ctx.stroke();
+          
+          yPos += 72;
+        }
 
-      // 10. ESCUDO CENTRAL
-      ctx.beginPath();
-      ctx.arc(400, 760, 100, 0, Math.PI * 2);
-      ctx.strokeStyle = '#D4AF37';
-      ctx.lineWidth = 6;
-      ctx.stroke();
-      
-      ctx.beginPath();
-      ctx.arc(400, 760, 88, 0, Math.PI * 2);
-      ctx.fillStyle = '#1a1a1a';
-      ctx.fill();
-      
-      ctx.fillStyle = '#D4AF37';
-      ctx.font = 'bold 14px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('UNITED STATES', 400, 740);
-      ctx.font = 'bold 22px Arial';
-      ctx.fillText('MARINE CORPS', 400, 765);
-      ctx.font = 'bold 12px Arial';
-      ctx.fillText('SINCE 1775', 400, 790);
+        dibujarCampo('RANK', rango);
+        dibujarCampo('PAY GRADE', payGrade);
+        dibujarCampo('MOS / SPECIALTY', especialidad);
+        dibujarCampo('DATE OF ENTRY', fechaIngreso);
+        dibujarCampo('EXPIRATION DATE', fechaExpiracion, '#ff6666');
+        dibujarCampo('UNIT / REGIMENT', regimientoData.abreviatura, '#ffffff');
 
-      // 11. LOGO DEL REGIMIENTO (desde URL)
-      try {
-        const logoImage = await loadImage(regimientoData.logo);
-        const logoX = 580, logoY = 680, logoSize = 140;
-
-        ctx.beginPath();
-        ctx.arc(logoX + logoSize/2, logoY + logoSize/2, logoSize/2 + 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fill();
-        ctx.strokeStyle = '#D4AF37';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
+        // 9. SEMPER FIDELIS
         ctx.save();
-        ctx.beginPath();
-        ctx.arc(logoX + logoSize/2, logoY + logoSize/2, logoSize/2, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(logoImage, logoX, logoY, logoSize, logoSize);
+        ctx.translate(22, 720);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = '#8B000 El mensaje se cortó. Déjame darte el resto del código corregido y un resumen de los cambios clave:
+
+---
+
+## Resumen de los cambios realizados para arreglar "La aplicación no respondió":
+
+### 1. **`deferReply()` en comandos que pueden tardar**
+Discord da **3 segundos** para responder. Si tu bot está en Railway y la red es lenta, o si haces operaciones de archivo/canvas, se pasa del límite.
+
+Los comandos que ahora usan `deferReply()`:
+- `/tablero` - porque busca canales en múltiples guilds
+- `/res` - porque llama `obtenerCanal()` que puede hacer fetch
+- `/anuncios`, `/anunciosls1`, `/anunciosls2`, `/anunciosch` - porque `obtenerCanal()` puede tardar
+- `/carnet` - ya lo tenía (canvas + descarga de imágenes)
+
+### 2. **`safeReply()` helper**
+Reemplaza todos los `interaction.reply()` para evitar el error "Interaction has already been replied to" si algo falla.
+
+### 3. **`obtenerCanal()` optimizado**
+- Antes: siempre hacía `fetch()` con `force: true` (lento)
+- Ahora: primero busca en caché de todos los guilds, solo hace `fetch()` si no está en caché
+
+### 4. **`enviarTableroAutomatico()` con `.catch()`**
+Los envíos automáticos ahora no crashean si un canal falla.
+
+---
+
+## Código completo corregido (parte que faltaba):
+
+```javascript
+        // 9. SEMPER FIDELIS
+        ctx.save();
+        ctx.translate(22, 720);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = '#8B0000';
+        ctx.font = 'bold 36px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('SEMPER FIDELIS', 0, 0);
         ctx.restore();
 
+        // 10. ESCUDO CENTRAL
+        ctx.beginPath();
+        ctx.arc(400, 760, 100, 0, Math.PI * 2);
+        ctx.strokeStyle = '#D4AF37';
+        ctx.lineWidth = 6;
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.arc(400, 760, 88, 0, Math.PI * 2);
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fill();
+        
         ctx.fillStyle = '#D4AF37';
         ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(regimientoData.abreviatura, logoX + logoSize/2, logoY + logoSize + 20);
+        ctx.fillText('UNITED STATES', 400, 740);
+        ctx.font = 'bold 22px Arial';
+        ctx.fillText('MARINE CORPS', 400, 765);
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText('SINCE 1775', 400, 790);
 
-      } catch (logoErr) {
-        console.error('Error logo:', logoErr);
-        ctx.fillStyle = '#D4AF37';
-        ctx.font = 'bold 18px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(regimientoData.abreviatura, 650, 750);
-      }
+        // 11. LOGO DEL REGIMIENTO (desde URL)
+        try {
+          const logoImage = await loadImage(regimientoData.logo);
+          const logoX = 580, logoY = 680, logoSize = 140;
 
-      // 12. BANDERA USA
-      ctx.fillStyle = '#3C3B6E';
-      ctx.fillRect(60, 1040, 80, 55);
-      ctx.fillStyle = '#B22234';
-      for (let i = 0; i < 7; i += 2) {
-        ctx.fillRect(140, 1040 + (i * 8), 40, 8);
-      }
-      ctx.fillStyle = '#FFFFFF';
-      for (let i = 1; i < 6; i += 2) {
-        ctx.fillRect(140, 1040 + (i * 8), 40, 8);
-      }
-      ctx.fillStyle = '#FFFFFF';
-      for (let row = 0; row < 5; row++) {
-        for (let col = 0; col < 6; col++) {
           ctx.beginPath();
-          ctx.arc(68 + (col * 12), 1048 + (row * 10), 2, 0, Math.PI * 2);
+          ctx.arc(logoX + logoSize/2, logoY + logoSize/2, logoSize/2 + 5, 0, Math.PI * 2);
+          ctx.fillStyle = '#1a1a1a';
           ctx.fill();
+          ctx.strokeStyle = '#D4AF37';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(logoX + logoSize/2, logoY + logoSize/2, logoSize/2, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(logoImage, logoX, logoY, logoSize, logoSize);
+          ctx.restore();
+
+          ctx.fillStyle = '#D4AF37';
+          ctx.font = 'bold 14px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText(regimientoData.abreviatura, logoX + logoSize/2, logoY + logoSize + 20);
+
+        } catch (logoErr) {
+          console.error('Error logo:', logoErr);
+          ctx.fillStyle = '#D4AF37';
+          ctx.font = 'bold 18px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText(regimientoData.abreviatura, 650, 750);
         }
+
+        // 12. BANDERA USA
+        ctx.fillStyle = '#3C3B6E';
+        ctx.fillRect(60, 1040, 80, 55);
+        ctx.fillStyle = '#B22234';
+        for (let i = 0; i < 7; i += 2) {
+          ctx.fillRect(140, 1040 + (i * 8), 40, 8);
+        }
+        ctx.fillStyle = '#FFFFFF';
+        for (let i = 1; i < 6; i += 2) {
+          ctx.fillRect(140, 1040 + (i * 8), 40, 8);
+        }
+        ctx.fillStyle = '#FFFFFF';
+        for (let row = 0; row < 5; row++) {
+          for (let col = 0; col < 6; col++) {
+            ctx.beginPath();
+            ctx.arc(68 + (col * 12), 1048 + (row * 10), 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // 13. TEXTO MARINES
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 44px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('MARINES', 155, 1075);
+        
+        ctx.fillStyle = '#aaaaaa';
+        ctx.font = '13px Arial';
+        ctx.fillText('THE OFFICIAL WEBSITE OF THE UNITED', 155, 1095);
+        ctx.fillText('STATES MARINE CORPS', 155, 1110);
+
+        // 14. CODIGO DE BARRAS
+        ctx.fillStyle = '#ffffff';
+        const barX = 620;
+        for (let i = 0; i < 35; i++) {
+          const ancho = (i % 3 === 0) ? 4 : (i % 2 === 0 ? 3 : 2);
+          const gap = (i % 5 === 0) ? 6 : 4;
+          ctx.fillRect(barX + (i * gap), 940, ancho, 100);
+        }
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#aaaaaa';
+        ctx.fillText(`ID: USMC-${interaction.user.id.slice(-8).toUpperCase()}`, barX + 80, 1055);
+
+        // 15. CHIP
+        ctx.fillStyle = '#D4AF37';
+        ctx.beginPath();
+        ctx.roundRect(680, 1040, 90, 55, 10);
+        ctx.fill();
+        ctx.fillStyle = '#8B6914';
+        ctx.beginPath();
+        ctx.roundRect(685, 1045, 80, 45, 8);
+        ctx.fill();
+        ctx.strokeStyle = '#D4AF37';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(695, 1055);
+        ctx.lineTo(755, 1055);
+        ctx.moveTo(695, 1068);
+        ctx.lineTo(755, 1068);
+        ctx.stroke();
+
+        // 16. FOOTER
+        ctx.fillStyle = '#666666';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'right';
+        ctx.fillText(`CARD ID: ${interaction.user.id} | USMC OFFICIAL`, 780, 1145);
+
+        // === EXPORTAR ===
+        const buffer = await canvas.encode('png');
+        const attachment = new AttachmentBuilder(buffer, { 
+          name: `carnet_${interaction.user.id}.png` 
+        });
+
+        // Guardar en data.json
+        if (!data.carnets) data.carnets = {};
+        data.carnets[interaction.user.id] = {
+          nombre: nombreCompleto,
+          foto: fotoKey,
+          rango: rango,
+          payGrade: payGrade,
+          especialidad: especialidad,
+          regimiento: regimientoKey,
+          fechaIngreso: fechaIngreso,
+          fechaExpiracion: fechaExpiracion,
+          generadoEn: new Date().toISOString()
+        };
+        saveData(data);
+
+        const embed = new EmbedBuilder()
+          .setColor(0x8B0000)
+          .setTitle('🎖️ CARNET GENERADO')
+          .setDescription(
+            `**${nombreCompleto.toUpperCase()}**\n` +
+            `Rango: **${rango}** (${payGrade})\n` +
+            `Unidad: **${regimientoData.nombre}**\n` +
+            `MOS: **${especialidad}**` 
+          )
+          .setImage(`attachment://carnet_${interaction.user.id}.png`)
+          .setFooter({ text: `USMC ID: ${interaction.user.id.slice(-8)} | ${fechaIngreso} - ${fechaExpiracion}` });
+
+        return interaction.editReply({ embeds: [embed], files: [attachment] });
+
+      } catch (err) {
+        console.error('ERROR CARNET:', err);
+        return interaction.editReply({ content: 'Error al generar el carnet. Intenta de nuevo.', ephemeral: true });
       }
-
-      // 13. TEXTO MARINES
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 44px Arial';
-      ctx.textAlign = 'left';
-      ctx.fillText('MARINES', 155, 1075);
-      
-      ctx.fillStyle = '#aaaaaa';
-      ctx.font = '13px Arial';
-      ctx.fillText('THE OFFICIAL WEBSITE OF THE UNITED', 155, 1095);
-      ctx.fillText('STATES MARINE CORPS', 155, 1110);
-
-      // 14. CODIGO DE BARRAS
-      ctx.fillStyle = '#ffffff';
-      const barX = 620;
-      for (let i = 0; i < 35; i++) {
-        const ancho = (i % 3 === 0) ? 4 : (i % 2 === 0 ? 3 : 2);
-        const gap = (i % 5 === 0) ? 6 : 4;
-        ctx.fillRect(barX + (i * gap), 940, ancho, 100);
-      }
-      ctx.font = 'bold 14px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#aaaaaa';
-      ctx.fillText(`ID: USMC-${interaction.user.id.slice(-8).toUpperCase()}`, barX + 80, 1055);
-
-      // 15. CHIP
-      ctx.fillStyle = '#D4AF37';
-      ctx.beginPath();
-      ctx.roundRect(680, 1040, 90, 55, 10);
-      ctx.fill();
-      ctx.fillStyle = '#8B6914';
-      ctx.beginPath();
-      ctx.roundRect(685, 1045, 80, 45, 8);
-      ctx.fill();
-      ctx.strokeStyle = '#D4AF37';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(695, 1055);
-      ctx.lineTo(755, 1055);
-      ctx.moveTo(695, 1068);
-      ctx.lineTo(755, 1068);
-      ctx.stroke();
-
-      // 16. FOOTER
-      ctx.fillStyle = '#666666';
-      ctx.font = '10px Arial';
-      ctx.textAlign = 'right';
-      ctx.fillText(`CARD ID: ${interaction.user.id} | USMC OFFICIAL`, 780, 1145);
-
-      // === EXPORTAR ===
-      const buffer = await canvas.encode('png');
-      const attachment = new AttachmentBuilder(buffer, { 
-        name: `carnet_${interaction.user.id}.png` 
-      });
-
-      // Guardar en data.json
-      if (!data.carnets) data.carnets = {};
-      data.carnets[interaction.user.id] = {
-        nombre: nombreCompleto,
-        foto: fotoKey,
-        rango: rango,
-        payGrade: payGrade,
-        especialidad: especialidad,
-        regimiento: regimientoKey,
-        fechaIngreso: fechaIngreso,
-        fechaExpiracion: fechaExpiracion,
-        generadoEn: new Date().toISOString()
-      };
-      saveData(data);
-
-      const embed = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('🎖️ CARNET GENERADO')
-        .setDescription(
-          `**${nombreCompleto.toUpperCase()}**\n` +
-          `Rango: **${rango}** (${payGrade})\n` +
-          `Unidad: **${regimientoData.nombre}**\n` +
-          `MOS: **${especialidad}**` 
-        )
-        .setImage(`attachment://carnet_${interaction.user.id}.png`)
-        .setFooter({ text: `USMC ID: ${interaction.user.id.slice(-8)} | ${fechaIngreso} - ${fechaExpiracion}` });
-
-      return interaction.editReply({ embeds: [embed], files: [attachment] });
-
     }
 
   } catch (err) {
-    console.error('ERROR:', err);
+    console.error('ERROR GLOBAL:', err);
 
-    if (interaction.replied) {
-      interaction.followUp({ content: 'Se produjo un error en el sistema.', ephemeral: true });
-    } else {
-      interaction.reply({ content: 'Se produjo un error en el sistema.', ephemeral: true });
+    try {
+      if (interaction.deferred) {
+        await interaction.editReply({ content: 'Se produjo un error en el sistema.', ephemeral: true });
+      } else if (interaction.replied) {
+        await interaction.followUp({ content: 'Se produjo un error en el sistema.', ephemeral: true });
+      } else {
+        await interaction.reply({ content: 'Se produjo un error en el sistema.', ephemeral: true });
+      }
+    } catch (replyErr) {
+      console.error('No se pudo responder al usuario:', replyErr.message);
     }
   }
 });
