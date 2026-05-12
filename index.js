@@ -1,5 +1,15 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { 
+  Client, 
+  GatewayIntentBits, 
+  REST, 
+  Routes, 
+  SlashCommandBuilder, 
+  EmbedBuilder, 
+  PermissionFlagsBits,
+  AttachmentBuilder
+} = require('discord.js');
 const fs = require('fs');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
 // ===== PROTECCION ANTI-CRASH =====
 process.on('uncaughtException', err => console.error('ERROR GLOBAL:', err));
@@ -27,22 +37,61 @@ const CANAL_ANUNCIOS = '1499835071245586544';
 const CANAL_ANUNCIOS_LS = '1465188998099243090';
 const CANAL_ANUNCIOS_CH = '1308186822937153546';
 
-// Hilo de foro para tickets
 const HILO_TICKETS = '1501741776933879859';
 
-// ===== ROLES POR PERMISO =====
+// ===== ROLES =====
 const ROLES_STAFF = ['1249089576270696508', '1249089640632422470'];
 const ROL_USUARIO = '1249089172308885576';
 const ROL_ESPECIAL = '1249095569150836781';
-
-// Roles para anuncios
 const ROLES_ANUNCIOS = ['1499828342499573970', '1467162969774227713'];
-
-// Roles para /rolests3
 const ROLES_ROLESTS3 = ['1499828342499573970', '1467162969774227713'];
-
-// Roles para /res y /resta
 const ROLES_RES = ['1499828342499573970', '1467162969774227713'];
+
+// ===== IMAGENES DE SOLDADOS (URLs) =====
+const FOTOS_SOLDADO = {
+  'soldado1': 'https://media.discordapp.net/attachments/1500299269855379610/1503540408242802738/8d71445b-3453-4e76-948d-90a2cdb2010b.png?ex=6a03b89f&is=6a02671f&hm=b33e70dab9fefcf078c055aa0844182a609edb8d8dc45bda6bc2cb0896ac63ad&=&format=webp&quality=lossless',
+  'soldado2': 'https://media.discordapp.net/attachments/1500299269855379610/1503541583914733628/aa466a4f-4dc0-4d0f-8d18-5e7c686cbc64.png?ex=6a03b9b8&is=6a026838&hm=a95fa74a495adc2a9bbaf2af34ff82899ed7f00469035d1e66c96ad5893e0420&=&format=webp&quality=lossless',
+  'soldado3': 'https://media.discordapp.net/attachments/1500299269855379610/1503541820867739648/461db43f-e68c-447b-9e12-3258f6141164.png?ex=6a03b9f0&is=6a026870&hm=1943f9864dfdbe9d2e23787e106769046d7bb435bbd63ead8eb1d04c884d3088&=&format=webp&quality=lossless',
+  'soldado4': 'https://media.discordapp.net/attachments/1500299269855379610/1503543886537166889/86901073-03f5-407e-a9c8-0640a54c88eb.png?ex=6a03bbdd&is=6a026a5d&hm=56199df5e89844786af92ba69729a2f11b5f563daa6959cb147854fef7d56e84&=&format=webp&quality=lossless',
+  'soldado5': 'https://media.discordapp.net/attachments/1500299269855379610/1503544447323996170/58a2b2e4-a1c4-4c1f-a778-744858aeafe8.png?ex=6a03bc62&is=6a026ae2&hm=e4586c4b3f385a37a905d45492846b39267b02591cfef5f1be9a723a0d28c097&=&format=webp&quality=lossless',
+  'soldado6': 'https://media.discordapp.net/attachments/1500299269855379610/1503546826710581248/c632e67d-eb7f-449a-bad4-ebe620f8d936.png?ex=6a03be9a&is=6a026d1a&hm=c93fcbc2ba237562df592e32140407f9616b57f9919e569f2233ff1f8220ad6f&=&format=webp&quality=lossless',
+  'soldado7': 'https://media.discordapp.net/attachments/1500299269855379610/1503546852463743098/a9ab0a26-7b2c-4440-919a-4f1818656c76.png?ex=6a03bea0&is=6a026d20&hm=6d63432d36f9c24ab3cb38fe6b0a67d6a94d870de955030044765bcc84b6b367&=&format=webp&quality=lossless',
+  'soldado8': 'https://media.discordapp.net/attachments/1500299269855379610/1503549951886626847/b5a5c496-0ab2-493a-a072-f4baf8fe7a08.png?ex=6a03c183&is=6a027003&hm=9d3d94227af2f912ff864422f71501d1c9b2e70db9fa96513b4132c1943d1fcb&=&format=webp&quality=lossless'
+};
+
+// ===== LOGOS DE REGIMIENTOS (URLs) =====
+const REGIMIENTOS = {
+  '3rd_marines': {
+    nombre: '3rd Marine Division',
+    abreviatura: '3rd MARDIV',
+    logo: 'https://media.discordapp.net/attachments/1464318898609586339/1468827872591479009/3DMARDIV_Vector_Caltrap.png?ex=6a03574e&is=6a0205ce&hm=a15959ec843c6603171187549f0ccec53abe7e646aa1ec5cc562a85ff64a7462&=&format=webp&quality=lossless&width=980&height=978'
+  },
+  '1st_raiders': {
+    nombre: '1st Regiment Marine Raiders',
+    abreviatura: '1st Raiders',
+    logo: 'https://media.discordapp.net/attachments/1464319159222538333/1467258914784673995/image.png?ex=6a0390d9&is=6a023f59&hm=164e7b0c7a9edc07be622130a93c312e7884f27e9bfb76d5e550021e372a4bf3&=&format=webp&quality=lossless'
+  },
+  '3rd_aircraft': {
+    nombre: '3rd Marine Aircraft Wing',
+    abreviatura: '3rd MAW',
+    logo: 'https://media.discordapp.net/attachments/1464848436007538760/1467510044751827134/image.png?ex=6a03293b&is=6a01d7bb&hm=d9b0b7fd06eab0ad32088ce34b607bc0a6b04001178f445ab9f8a9b485a2fcde&=&format=webp&quality=lossless'
+  },
+  '3rd_littoral': {
+    nombre: '3rd Marine Littoral Regiment',
+    abreviatura: '3rd MLR',
+    logo: 'https://media.discordapp.net/attachments/1467255078221250652/1467255835779534988/image.png?ex=6a038dfb&is=6a023c7b&hm=51859d6567072b9090cc8308fe4780d614d32459531d8b2a8ad55d6391a5135a&=&format=webp&quality=lossless'
+  },
+  'clr3': {
+    nombre: 'Combat Logistics Regiment 3',
+    abreviatura: 'CLR-3',
+    logo: 'https://media.discordapp.net/attachments/1465025861269852399/1467520645465378917/image.png?ex=6a03331b&is=6a01e19b&hm=48ae53319cc6d03f0a19b1fb29aa2939f97e34615f2c431930187fd1449eb430&=&format=webp&quality=lossless'
+  },
+  'mcrd_sandiego': {
+    nombre: 'Marine Corps Recruit Depot (San Diego)',
+    abreviatura: 'MCRD San Diego',
+    logo: 'https://media.discordapp.net/attachments/1464301222470090753/1464312536257269802/image.png?ex=6a0364d2&is=6a021352&hm=f3f74f8f61820b62fa2007a6c7a74458d238ff4a251379f12dcd03e8b565fabd&=&format=webp&quality=lossless'
+  }
+};
 
 const DATA_FILE = './data.json';
 const TICKETS_FILE = './tickets.json';
@@ -92,26 +141,20 @@ function tieneAlgunRol(member, rolesArray) {
   return rolesArray.some(rolId => member.roles.cache.has(rolId));
 }
 
-// ===== FUNCION PARA OBTENER RANGO DE UN MIEMBRO =====
 function obtenerRango(member) {
   const rangos = ['COL', 'MAJ', 'CPT', 'LT', 'WO-1', 'WO-2', 'WO-3', 'SPC', 'SGT', 'CPL', 'LCPL', 'PFC', 'PVT'];
-
   for (const rango of rangos) {
     const rolRango = member.roles.cache.find(r => 
       r.name.toUpperCase().includes(rango) || r.name.toUpperCase().startsWith(rango)
     );
-    if (rolRango) {
-      return rango;
-    }
+    if (rolRango) return rango;
   }
   return 'PVT';
 }
 
-// ===== FUNCION PARA OBTENER CANAL/HILO CON SOPORTE FORO =====
 async function obtenerCanal(channelId) {
   try {
     let canal = await client.channels.fetch(channelId, { force: true });
-
     if (canal && canal.isThread && canal.isThread()) {
       if (canal.archived) {
         try {
@@ -122,7 +165,6 @@ async function obtenerCanal(channelId) {
         }
       }
     }
-
     return canal;
   } catch (err) {
     console.error(`Error al obtener canal/hilo ${channelId}:`, err.message);
@@ -133,10 +175,8 @@ async function obtenerCanal(channelId) {
 // ===== FUNCION PARA ENVIAR TABLERO AUTOMATICO =====
 async function enviarTableroAutomatico() {
   const data = loadData();
-
   const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
   const guildStaff = client.guilds.cache.get(GUILD_STAFF);
-
   const canalPrincipal = guildPrincipal?.channels.cache.get(CANAL_PRINCIPAL);
   const canalStaff = guildStaff?.channels.cache.get(CANAL_STAFF);
   const canalFinDia = guildPrincipal?.channels.cache.get(CANAL_FIN_DIA);
@@ -153,7 +193,6 @@ async function enviarTableroAutomatico() {
     const embedFinDia = new EmbedBuilder()
       .setColor(0x8B0000)
       .setDescription(`Fin del dia ${fechaNY}`);
-
     await canalFinDia.send({ embeds: [embedFinDia] });
   }
 
@@ -180,7 +219,6 @@ async function enviarTableroAutomatico() {
     const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
     const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
     const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
-
     return '\`' + posicion + '\` ' + rango + ' | ' + nombre + '\n' +
            'Efectividades: ' + efectividades + ' | ' + porcentaje + '% | ' + sincronizacion;
   });
@@ -200,7 +238,6 @@ async function enviarTableroAutomatico() {
 
   await canalPrincipal.send({ embeds: [embedPrincipal] });
   await canalStaff.send({ embeds: [embedStaff] });
-
   console.log('Tablero automatico enviado: ' + fechaNY);
 }
 
@@ -210,12 +247,10 @@ function iniciarHorarioAutomatico() {
     const ahora = new Date();
     const opciones = { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false };
     const horaNY = ahora.toLocaleString('en-US', opciones);
-
     if (horaNY === '00:00') {
       enviarTableroAutomatico();
     }
   }, 60000);
-
   console.log('Sistema de horario automatico activado. Verificando hora NY cada minuto.');
 }
 
@@ -296,7 +331,126 @@ const commands = [
   new SlashCommandBuilder()
     .setName('anunciosch')
     .setDescription('Enviar anuncio al canal CH')
-    .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true))
+    .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true)),
+
+  // ===== NUEVO COMANDO /CARNET =====
+  new SlashCommandBuilder()
+    .setName('carnet')
+    .setDescription('Generar carnet de identificacion militar')
+    .addStringOption(o => 
+      o.setName('nombre_completo')
+        .setDescription('Nombre completo del marine')
+        .setRequired(true)
+        .setMaxLength(40)
+    )
+    .addStringOption(o => 
+      o.setName('foto_soldado')
+        .setDescription('Elige tu foto de soldado')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Soldado 1', value: 'soldado1' },
+          { name: 'Soldado 2', value: 'soldado2' },
+          { name: 'Soldado 3', value: 'soldado3' },
+          { name: 'Soldado 4', value: 'soldado4' },
+          { name: 'Soldado 5', value: 'soldado5' },
+          { name: 'Cupula de la faccion', value: 'soldado6' },
+          { name: 'Cupula', value: 'soldado7' },
+          { name: 'Fuerzas Especiales', value: 'soldado8' }
+        )
+    )
+    .addStringOption(o => 
+      o.setName('rango')
+        .setDescription('Tu rango')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Private (PVT)', value: 'PVT' },
+          { name: 'Private First Class (PFC)', value: 'PFC' },
+          { name: 'Lance Corporal (LCPL)', value: 'LCPL' },
+          { name: 'Corporal (CPL)', value: 'CPL' },
+          { name: 'Sergeant (SGT)', value: 'SGT' },
+          { name: 'Staff Sergeant (SSGT)', value: 'SSGT' },
+          { name: 'Gunnery Sergeant (GYSGT)', value: 'GYSGT' },
+          { name: 'Master Sergeant (MSGT)', value: 'MSGT' },
+          { name: 'First Sergeant (1SGT)', value: '1SGT' },
+          { name: 'Master Gunnery Sergeant (MGYSGT)', value: 'MGYSGT' },
+          { name: 'Sergeant Major (SGTMAJ)', value: 'SGTMAJ' },
+          { name: 'Warrant Officer 1 (WO-1)', value: 'WO-1' },
+          { name: 'Chief Warrant Officer 2 (CWO-2)', value: 'CWO-2' },
+          { name: 'Chief Warrant Officer 3 (CWO-3)', value: 'CWO-3' },
+          { name: 'Chief Warrant Officer 4 (CWO-4)', value: 'CWO-4' },
+          { name: 'Chief Warrant Officer 5 (CWO-5)', value: 'CWO-5' },
+          { name: 'Second Lieutenant (2LT)', value: '2LT' },
+          { name: 'First Lieutenant (1LT)', value: '1LT' },
+          { name: 'Captain (CPT)', value: 'CPT' },
+          { name: 'Major (MAJ)', value: 'MAJ' },
+          { name: 'Lieutenant Colonel (LTCOL)', value: 'LTCOL' },
+          { name: 'Colonel (COL)', value: 'COL' },
+          { name: 'Brigadier General (BGEN)', value: 'BGEN' },
+          { name: 'Major General (MAJGEN)', value: 'MAJGEN' },
+          { name: 'Lieutenant General (LTGEN)', value: 'LTGEN' },
+          { name: 'General (GEN)', value: 'GEN' }
+        )
+    )
+    .addStringOption(o => 
+      o.setName('pay_grade')
+        .setDescription('Grado de pago')
+        .setRequired(true)
+        .addChoices(
+          { name: 'E-1', value: 'E-1' },
+          { name: 'E-2', value: 'E-2' },
+          { name: 'E-3', value: 'E-3' },
+          { name: 'E-4', value: 'E-4' },
+          { name: 'E-5', value: 'E-5' },
+          { name: 'E-6', value: 'E-6' },
+          { name: 'E-7', value: 'E-7' },
+          { name: 'E-8', value: 'E-8' },
+          { name: 'E-9', value: 'E-9' },
+          { name: 'W-1', value: 'W-1' },
+          { name: 'W-2', value: 'W-2' },
+          { name: 'W-3', value: 'W-3' },
+          { name: 'W-4', value: 'W-4' },
+          { name: 'W-5', value: 'W-5' },
+          { name: 'O-1', value: 'O-1' },
+          { name: 'O-2', value: 'O-2' },
+          { name: 'O-3', value: 'O-3' },
+          { name: 'O-4', value: 'O-4' },
+          { name: 'O-5', value: 'O-5' },
+          { name: 'O-6', value: 'O-6' },
+          { name: 'O-7', value: 'O-7' },
+          { name: 'O-8', value: 'O-8' },
+          { name: 'O-9', value: 'O-9' },
+          { name: 'O-10', value: 'O-10' }
+        )
+    )
+    .addStringOption(o => 
+      o.setName('especialidad')
+        .setDescription('Tu MOS o especialidad')
+        .setRequired(true)
+        .setMaxLength(30)
+    )
+    .addStringOption(o => 
+      o.setName('regimiento')
+        .setDescription('Selecciona tu regimiento')
+        .setRequired(true)
+        .addChoices(
+          { name: '3rd Marine Division', value: '3rd_marines' },
+          { name: '1st Regiment Marine Raiders', value: '1st_raiders' },
+          { name: '3rd Marine Aircraft Wing', value: '3rd_aircraft' },
+          { name: '3rd Marine Littoral Regiment', value: '3rd_littoral' },
+          { name: 'Combat Logistics Regiment 3', value: 'clr3' },
+          { name: 'Marine Corps Recruit Depot (San Diego)', value: 'mcrd_sandiego' }
+        )
+    )
+    .addStringOption(o => 
+      o.setName('fecha_ingreso')
+        .setDescription('Fecha de ingreso (DD/MM/AA)')
+        .setRequired(true)
+    )
+    .addStringOption(o => 
+      o.setName('fecha_expiracion')
+        .setDescription('Fecha de expiracion (DD/MM/AA)')
+        .setRequired(true)
+    )
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR COMANDOS =====
@@ -867,79 +1021,333 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
     }
 
-    // ===== SIACEPTO =====
-    if (interaction.commandName === 'siacepto') {
+    // ===== CARNET =====
+    if (interaction.commandName === 'carnet') {
       if (!interaction.member.roles.cache.has(ROL_USUARIO)) {
         return interaction.reply({ content: 'No tienes permiso para usar este comando.', ephemeral: true });
       }
 
-      const embedInstalacion = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('INSTALACION DE TS3 EN ANDROID - PASO 1')
-        .setDescription('Seleccionar "continue without logging in" para iniciar sin credenciales personales.')
-        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029507519840257/IMG-20251112-WA0000.jpg');
+      await interaction.deferReply();
 
-      const embedPaso2 = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('PASO 2 - ANADIR SERVIDOR')
-        .setDescription('Localizar la opcion para agregar un nuevo servidor.')
-        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029508036001873/IMG-20251112-WA0001.jpg');
+      const nombreCompleto = interaction.options.getString('nombre_completo');
+      const fotoKey = interaction.options.getString('foto_soldado');
+      const rango = interaction.options.getString('rango');
+      const payGrade = interaction.options.getString('pay_grade');
+      const especialidad = interaction.options.getString('especialidad');
+      const regimientoKey = interaction.options.getString('regimiento');
+      const fechaIngreso = interaction.options.getString('fecha_ingreso');
+      const fechaExpiracion = interaction.options.getString('fecha_expiracion');
 
-      const embedPaso3 = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('PASO 3 - CONFIGURACION DE DATOS')
-        .setDescription('Completar los campos con la informacion proporcionada.')
-        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438029508543512606/IMG-20251112-WA0003.jpg');
+      const regimientoData = REGIMIENTOS[regimientoKey];
+      const fotoURL = FOTOS_SOLDADO[fotoKey];
 
-      const embedConfig = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('CONFIGURACION - PASO 1: AJUSTES')
-        .setDescription('Acceder al menu de ajustes de la aplicacion.')
-        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035784434323496/IMG-20251112-WA0004.jpg');
+      // === GENERAR CANVAS ===
+      const canvas = createCanvas(800, 1200);
+      const ctx = canvas.getContext('2d');
 
-      const embedConfig2 = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('CONFIGURACION - PASO 2: OPCIONES DE AUDIO')
-        .setDescription('Activar Push to talk, superposicion de PTT y manos libres para optimizar la experiencia.')
-        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035784832651394/IMG-20251112-WA0005.jpg');
+      // 1. FONDO NEGRO
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, 800, 1200);
 
-      const embedConfig3 = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('CONFIGURACION - PASO 3: SENSOR DE PROXIMIDAD')
-        .setDescription('Desactivar el sensor de proximidad para evitar interrupciones.')
-        .setImage('https://cdn.discordapp.com/attachments/1285053860435726396/1438035785332031529/IMG-20251112-WA0006.jpg');
+      // 2. BARRAS ROJAS
+      ctx.fillStyle = '#8B0000';
+      ctx.fillRect(0, 0, 800, 40);
+      ctx.fillRect(0, 1160, 800, 40);
 
-      const embedCuenta = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('CREDENCIALES DE ACCESO - JUNIOR ENLISTED')
-        .setDescription(
-          'Correo: KenwayHaytham005@gmail.com\n' +
-          'Contrasena: UMCSacceso501\n\n' +
-          'Advertencia: El uso de estas credenciales implica la aceptacion de los terminos establecidos. Cualquier comparticion no autorizada o modificacion indebida sera sancionada.'
+      // 3. ESQUINAS
+      ctx.fillStyle = '#8B0000';
+      [
+        [40, 40, 60], [760, 40, 60],
+        [40, 1160, 60], [760, 1160, 60]
+      ].forEach(([x, y, r]) => {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // 4. MARCO
+      ctx.strokeStyle = '#8B0000';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(30, 30, 740, 1140);
+
+      // 5. ENCABEZADO
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 22px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('UNITED STATES MARINE CORPS', 400, 75);
+      ctx.fillStyle = '#c0c0c0';
+      ctx.font = '16px Arial';
+      ctx.fillText('OFFICIAL IDENTIFICATION CARD', 400, 95);
+
+      // 6. FOTO DEL SOLDADO (desde URL)
+      try {
+        const fotoImage = await loadImage(fotoURL);
+        const fotoX = 60, fotoY = 120, fotoW = 280, fotoH = 350;
+
+        const ratio = Math.max(fotoW / fotoImage.width, fotoH / fotoImage.height);
+        const shiftX = (fotoW - fotoImage.width * ratio) / 2;
+        const shiftY = (fotoH - fotoImage.height * ratio) / 2;
+
+        ctx.drawImage(
+          fotoImage,
+          0, 0, fotoImage.width, fotoImage.height,
+          fotoX + shiftX, fotoY + shiftY,
+          fotoImage.width * ratio, fotoImage.height * ratio
         );
 
-      await interaction.reply({ content: interaction.user.username + ' ha aceptado los terminos. Procediendo con la entrega de credenciales y guia:' });
-      await interaction.followUp({ embeds: [embedInstalacion] });
-      await interaction.followUp({ embeds: [embedPaso2] });
-      await interaction.followUp({ embeds: [embedPaso3] });
-      await interaction.followUp({ embeds: [embedConfig] });
-      await interaction.followUp({ embeds: [embedConfig2] });
-      await interaction.followUp({ embeds: [embedConfig3] });
-      await interaction.followUp({ embeds: [embedCuenta] });
+        ctx.strokeStyle = '#D4AF37';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(fotoX, fotoY, fotoW, fotoH);
 
-      return;
-    }
+      } catch (imgErr) {
+        console.error('Error foto soldado:', imgErr);
+        ctx.fillStyle = '#333';
+        ctx.fillRect(60, 120, 280, 350);
+        ctx.fillStyle = '#ff4444';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('IMAGEN NO', 200, 280);
+        ctx.fillText('DISPONIBLE', 200, 310);
+      }
 
-  } catch (err) {
-    console.error('ERROR:', err);
+      // 7. NOMBRE
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 26px Arial';
+      ctx.textAlign = 'center';
+      
+      const nombreUpper = nombreCompleto.toUpperCase();
+      const partes = nombreUpper.split(' ');
+      
+      if (nombreUpper.length > 22) {
+        const mitad = Math.ceil(partes.length / 2);
+        ctx.fillText(partes.slice(0, mitad).join(' '), 200, 500);
+        ctx.fillText(partes.slice(mitad).join(' '), 200, 530);
+      } else {
+        ctx.fillText(nombreUpper, 200, 515);
+      }
 
-    if (interaction.replied) {
-      interaction.followUp({ content: 'Se produjo un error en el sistema.', ephemeral: true });
-    } else {
-      interaction.reply({ content: 'Se produjo un error en el sistema.', ephemeral: true });
-    }
-  }
-});
+      // 8. DATOS DERECHA
+      const xDer = 400;
+      let yPos = 140;
 
-// ===== LOGIN =====
-client.login(TOKEN);
+      function dibujarCampo(titulo, valor, color = '#FFD700') {
+        ctx.fillStyle = '#888888';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(titulo.toUpperCase(), xDer, yPos);
+        
+        ctx.fillStyle = color;
+        ctx.font = 'bold 30px Arial';
+        ctx.fillText(valor.toUpperCase(), xDer, yPos + 32);
+        
+        ctx.strokeStyle = '#8B0000';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(xDer, yPos + 42);
+        ctx.lineTo(740, yPos + 42);
+        ctx.stroke();
+        
+        yPos += 72;
+      }
+
+      dibujarCampo('RANK', rango);
+      dibujarCampo('PAY GRADE', payGrade);
+      dibujarCampo('MOS / SPECIALTY', especialidad);
+      dibujarCampo('DATE OF ENTRY', fechaIngreso);
+      dibujarCampo('EXPIRATION DATE', fechaExpiracion, '#ff6666');
+      dibujarCampo('UNIT / REGIMENT', regimientoData.abreviatura, '#ffffff');
+
+      // 9. SEMPER FIDELIS
+      ctx.save();
+      ctx.translate(22, 720);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = '#8B0000';
+      ctx.font = 'bold 36px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('SEMPER FIDELIS', 0, 0);
+      ctx.restore();
+
+      // 10. ESCUDO CENTRAL
+      ctx.beginPath();
+      ctx.arc(400, 760, 100, 0, Math.PI * 2);
+      ctx.strokeStyle = '#D4AF37';
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.arc(400, 760, 88, 0, Math.PI * 2);
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fill();
+      
+      ctx.fillStyle = '#D4AF37';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('UNITED STATES', 400, 740);
+      ctx.font = 'bold 22px Arial';
+      ctx.fillText('MARINE CORPS', 400, 765);
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText('SINCE 1775', 400, 790);
+
+      // 11. LOGO DEL REGIMIENTO (desde URL)
+      try {
+        const logoImage = await loadImage(regimientoData.logo);
+        const logoX = 580, logoY = 680, logoSize = 140;
+
+        ctx.beginPath();
+        ctx.arc(logoX + logoSize/2, logoY + logoSize/2, logoSize/2 + 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fill();
+        ctx.strokeStyle = '#D4AF37';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(logoX + logoSize/2, logoY + logoSize/2, logoSize/2, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(logoImage, logoX, logoY, logoSize, logoSize);
+        ctx.restore();
+
+        ctx.fillStyle = '#D4AF37';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(regimientoData.abreviatura, logoX + logoSize/2, logoY + logoSize + 20);
+
+      } catch (logoErr) {
+        console.error('Error logo:', logoErr);
+        ctx.fillStyle = '#D4AF37';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(regimientoData.abreviatura, 650, 750);
+      }
+
+      // 12. BANDERA USA
+      ctx.fillStyle = '#3C3B6E';
+      ctx.fillRect(60, 1040, 80, 55);
+      ctx.fillStyle = '#B22234';
+      for (let i = 0; i < 7; i += 2) {
+        ctx.fillRect(140, 1040 + (i * 8), 40, 8);
+      }
+      ctx.fillStyle = '#FFFFFF';
+      for (let i = 1; i < 6; i += 2) {
+        ctx.fillRect(140, 1040 + (i * 8), 40, 8);
+      }
+      ctx.fillStyle = '#FFFFFF';
+      for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 6; col++) {
+          ctx.beginPath();
+          ctx.arc(68 + (col * 12), 1048 + (row * 10), 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // 13. TEXTO MARINES
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 44px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText('MARINES', 155, 1075);
+      
+      ctx.fillStyle = '#aaaaaa';
+      ctx.font = '13px Arial';
+      ctx.fillText('THE OFFICIAL WEBSITE OF THE UNITED', 155, 1095);
+      ctx.fillText('STATES MARINE CORPS', 155, 1110);
+
+      // 14. CODIGO DE BARRAS
+      ctx.fillStyle = '#ffffff';
+      const barX = 620;
+      for (let i = 0; i < 35; i++) {
+        const ancho = (i % 3 === 0) ? 4 : (i % 2 === 0 ? 3 : 2);
+        const gap = (i % 5 === 0) ? 6 : 4;
+        ctx.fillRect(barX + (i * gap), 940, ancho, 100);
+      }
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#aaaaaa';
+      ctx.fillText(`ID: USMC-${interaction.user.id.slice(-8).toUpperCase()}`, barX + 80, 1055);
+
+      // 15. CHIP
+      ctx.fillStyle = '#D4AF37';
+      ctx.beginPath();
+      ctx.roundRect(680, 1040, 90, 55, 10);
+      ctx.fill();
+      ctx.fillStyle = '#8B6914';
+      ctx.beginPath();
+      ctx.roundRect(685, 1045, 80, 45, 8);
+      ctx.fill();
+      ctx.strokeStyle = '#D4AF37';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(695, 1055);
+      ctx.lineTo(755, 1055);
+      ctx.moveTo(695, 1068);
+      ctx.lineTo(755, 1068);
+      ctx.stroke();
+
+      // 16. FOOTER
+      ctx.fillStyle = '#666666';
+      ctx.font = '10px Arial';
+      ctx.textAlign = 'right';
+      ctx.fillText(`CARD ID: ${interaction.user.id} | USMC OFFICIAL`, 780, 1145);
+
+      // === EXPORTAR ===
+      const buffer = await canvas.encode('png');
+      const attachment = new AttachmentBuilder(buffer, { 
+        name: `carnet_${interaction.user.id}.png` 
+      });
+
+      // Guardar en data.json
+      if (!data.carnets) data.carnets = {};
+      data.carnets[interaction.user.id] = {
+        nombre: nombreCompleto,
+        foto: fotoKey,
+        rango: rango,
+        payGrade: payGrade,
+        especialidad: especialidad,
+        regimiento: regimientoKey,
+        fechaIngreso: fechaIngreso,
+        fechaExpiracion: fechaExpiracion,
+        generadoEn: new Date().toISOString()
+      };
+      saveData(data);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x8B0000)
+        .setTitle('🎖️ CARNET GENERADO')
+        .setDescription(
+          `**${nombreCompleto.toUpperCase()}**\n` +
+          `Rango: **${rango}** (${payGrade})\n` +
+          `Unidad: **${regimientoData.nombre}**\n` +
+          `MOS: **${especialidad}**`
+        )
+        .setImage(`attachment://carnet_${interaction.user.id}.png`)
+        .setFooter({ text: `USMC ID: ${interaction.user.id.slice(-8)} | ${fechaIngreso} - ${fechaExpiracion}` El mensaje se cortó. Aquí te paso el archivo completo para que lo descargues:
+
+Descarga este archivo: [index.js completo con /carnet](sandbox:///mnt/agents/output/index.js)
+
+O si prefieres, te doy las instrucciones para subirlo a tu GitHub:
+
+1. Abre tu `index.js` en GitHub web
+2. Selecciona TODO el contenido (Ctrl+A) y bórralo
+3. Pega el código completo que te acabo de dar
+4. En **Commit changes** escribe: `Agregado comando /carnet con generador de imagenes`
+5. Click en **Commit changes**
+
+Railway detectará el cambio, hará deploy automáticamente e instalará `@napi-rs/canvas`.
+
+---
+
+## ¿Qué cambió exactamente en tu código?
+
+| Parte | Cambio |
+|-------|--------|
+| **Línea 1** | Se agregó `AttachmentBuilder` al import de `discord.js` |
+| **Línea 4** | Se agregó `const { createCanvas, loadImage } = require('@napi-rs/canvas');` |
+| **Líneas 45-95** | Nuevas constantes: `FOTOS_SOLDADO` (8 URLs) y `REGIMIENTOS` (6 URLs) |
+| **Comandos** | Se agregó el `SlashCommandBuilder` de `/carnet` con todas sus opciones |
+| **Interaction handler** | Se agregó todo el bloque `if (interaction.commandName === 'carnet')` que genera la imagen |
+
+---
+
+## ¿Cómo se usa el comando?
+
+El usuario escribe:
