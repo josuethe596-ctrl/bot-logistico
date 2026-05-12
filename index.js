@@ -154,7 +154,6 @@ function obtenerRango(member) {
 
 async function obtenerCanal(channelId) {
   try {
-    // Primero buscar en caché (rápido)
     for (const guild of client.guilds.cache.values()) {
       const canal = guild.channels.cache.get(channelId);
       if (canal) {
@@ -164,14 +163,13 @@ async function obtenerCanal(channelId) {
         return canal;
       }
     }
-    // Si no está en caché, hacer fetch (lento)
     let canal = await client.channels.fetch(channelId, { force: false });
     if (canal && canal.isThread && canal.isThread() && canal.archived) {
       try { await canal.setArchived(false); } catch(e) {}
     }
     return canal;
   } catch (err) {
-    console.error(`Error al obtener canal/hilo ${channelId}:`, err.message);
+    console.error('Error al obtener canal/hilo ' + channelId + ':', err.message);
     return null;
   }
 }
@@ -196,7 +194,7 @@ async function enviarTableroAutomatico() {
   if (canalFinDia && canalFinDia.isTextBased()) {
     const embedFinDia = new EmbedBuilder()
       .setColor(0x8B0000)
-      .setDescription(`Fin del dia ${fechaNY}`);
+      .setDescription('Fin del dia ' + fechaNY);
     await canalFinDia.send({ embeds: [embedFinDia] }).catch(() => {});
   }
 
@@ -205,7 +203,7 @@ async function enviarTableroAutomatico() {
     const rango = member ? obtenerRango(member) : 'PVT';
     const nombre = member ? member.displayName || member.user.username : 'Desconocido';
     const posicion = (index + 1).toString().padStart(2, '0');
-    return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + efectividades;
+    return '`' + posicion + '` ' + rango + ' | ' + nombre + ' = ' + efectividades;
   });
 
   const embedPrincipal = new EmbedBuilder()
@@ -223,7 +221,7 @@ async function enviarTableroAutomatico() {
     const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
     const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
     const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
-    return '\`' + posicion + '\` ' + rango + ' | ' + nombre + '\n' +
+    return '`' + posicion + '` ' + rango + ' | ' + nombre + '\n' +
            'Efectividades: ' + efectividades + ' | ' + porcentaje + '% | ' + sincronizacion;
   });
 
@@ -577,7 +575,6 @@ client.on('interactionCreate', async interaction => {
         return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
-      // deferReply porque puede tardar en obtener canales
       await interaction.deferReply({ ephemeral: true });
 
       const guildPrincipal = client.guilds.cache.get(GUILD_PRINCIPAL);
@@ -594,7 +591,7 @@ client.on('interactionCreate', async interaction => {
         const rango = member ? obtenerRango(member) : 'PVT';
         const nombre = member ? member.displayName || member.user.username : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
-        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + efectividades;
+        return '`' + posicion + '` ' + rango + ' | ' + nombre + ' = ' + efectividades;
       });
 
       const embedPrincipal = new EmbedBuilder()
@@ -613,7 +610,7 @@ client.on('interactionCreate', async interaction => {
         const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
         const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
 
-        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + '\n' +
+        return '`' + posicion + '` ' + rango + ' | ' + nombre + '\n' +
                'Efectividades: ' + efectividades + ' | ' + porcentaje + '% | ' + sincronizacion;
       });
 
@@ -869,7 +866,6 @@ client.on('interactionCreate', async interaction => {
         return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
-      // deferReply porque obtenerCanal puede tardar
       await interaction.deferReply();
 
       const usuario = interaction.options.getUser('usuario');
@@ -919,7 +915,7 @@ client.on('interactionCreate', async interaction => {
         const rango = member ? obtenerRango(member) : 'PVT';
         const nombre = member ? member.displayName || member.user.username : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
-        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + puntos;
+        return '`' + posicion + '` ' + rango + ' | ' + nombre + ' = ' + puntos;
       });
 
       const embed = new EmbedBuilder()
@@ -937,7 +933,6 @@ client.on('interactionCreate', async interaction => {
         return safeReply(interaction, { content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
-      // deferReply porque obtenerCanal puede tardar
       await interaction.deferReply({ ephemeral: true });
 
       const texto = interaction.options.getString('texto');
@@ -1136,20 +1131,16 @@ client.on('interactionCreate', async interaction => {
         const regimientoData = REGIMIENTOS[regimientoKey];
         const fotoURL = FOTOS_SOLDADO[fotoKey];
 
-        // === GENERAR CANVAS ===
         const canvas = createCanvas(800, 1200);
         const ctx = canvas.getContext('2d');
 
-        // 1. FONDO NEGRO
         ctx.fillStyle = '#0a0a0a';
         ctx.fillRect(0, 0, 800, 1200);
 
-        // 2. BARRAS ROJAS
         ctx.fillStyle = '#8B0000';
         ctx.fillRect(0, 0, 800, 40);
         ctx.fillRect(0, 1160, 800, 40);
 
-        // 3. ESQUINAS
         ctx.fillStyle = '#8B0000';
         [
           [40, 40, 60], [760, 40, 60],
@@ -1160,12 +1151,10 @@ client.on('interactionCreate', async interaction => {
           ctx.fill();
         });
 
-        // 4. MARCO
         ctx.strokeStyle = '#8B0000';
         ctx.lineWidth = 4;
         ctx.strokeRect(30, 30, 740, 1140);
 
-        // 5. ENCABEZADO
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 22px Arial';
         ctx.textAlign = 'center';
@@ -1174,7 +1163,6 @@ client.on('interactionCreate', async interaction => {
         ctx.font = '16px Arial';
         ctx.fillText('OFFICIAL IDENTIFICATION CARD', 400, 95);
 
-        // 6. FOTO DEL SOLDADO (desde URL)
         try {
           const fotoImage = await loadImage(fotoURL);
           const fotoX = 60, fotoY = 120, fotoW = 280, fotoH = 350;
@@ -1205,14 +1193,13 @@ client.on('interactionCreate', async interaction => {
           ctx.fillText('DISPONIBLE', 200, 310);
         }
 
-        // 7. NOMBRE
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 26px Arial';
         ctx.textAlign = 'center';
-        
+
         const nombreUpper = nombreCompleto.toUpperCase();
         const partes = nombreUpper.split(' ');
-        
+
         if (nombreUpper.length > 22) {
           const mitad = Math.ceil(partes.length / 2);
           ctx.fillText(partes.slice(0, mitad).join(' '), 200, 500);
@@ -1221,27 +1208,27 @@ client.on('interactionCreate', async interaction => {
           ctx.fillText(nombreUpper, 200, 515);
         }
 
-        // 8. DATOS DERECHA
         const xDer = 400;
         let yPos = 140;
 
-        function dibujarCampo(titulo, valor, color = '#FFD700') {
+        function dibujarCampo(titulo, valor, color) {
+          if (!color) color = '#FFD700';
           ctx.fillStyle = '#888888';
           ctx.font = 'bold 16px Arial';
           ctx.textAlign = 'left';
           ctx.fillText(titulo.toUpperCase(), xDer, yPos);
-          
+
           ctx.fillStyle = color;
           ctx.font = 'bold 30px Arial';
           ctx.fillText(valor.toUpperCase(), xDer, yPos + 32);
-          
+
           ctx.strokeStyle = '#8B0000';
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(xDer, yPos + 42);
           ctx.lineTo(740, yPos + 42);
           ctx.stroke();
-          
+
           yPos += 72;
         }
 
@@ -1252,41 +1239,6 @@ client.on('interactionCreate', async interaction => {
         dibujarCampo('EXPIRATION DATE', fechaExpiracion, '#ff6666');
         dibujarCampo('UNIT / REGIMENT', regimientoData.abreviatura, '#ffffff');
 
-        // 9. SEMPER FIDELIS
-        ctx.save();
-        ctx.translate(22, 720);
-        ctx.rotate(-Math.PI / 2);
-        ctx.fillStyle = '#8B000 El mensaje se cortó. Déjame darte el resto del código corregido y un resumen de los cambios clave:
-
----
-
-## Resumen de los cambios realizados para arreglar "La aplicación no respondió":
-
-### 1. **`deferReply()` en comandos que pueden tardar**
-Discord da **3 segundos** para responder. Si tu bot está en Railway y la red es lenta, o si haces operaciones de archivo/canvas, se pasa del límite.
-
-Los comandos que ahora usan `deferReply()`:
-- `/tablero` - porque busca canales en múltiples guilds
-- `/res` - porque llama `obtenerCanal()` que puede hacer fetch
-- `/anuncios`, `/anunciosls1`, `/anunciosls2`, `/anunciosch` - porque `obtenerCanal()` puede tardar
-- `/carnet` - ya lo tenía (canvas + descarga de imágenes)
-
-### 2. **`safeReply()` helper**
-Reemplaza todos los `interaction.reply()` para evitar el error "Interaction has already been replied to" si algo falla.
-
-### 3. **`obtenerCanal()` optimizado**
-- Antes: siempre hacía `fetch()` con `force: true` (lento)
-- Ahora: primero busca en caché de todos los guilds, solo hace `fetch()` si no está en caché
-
-### 4. **`enviarTableroAutomatico()` con `.catch()`**
-Los envíos automáticos ahora no crashean si un canal falla.
-
----
-
-## Código completo corregido (parte que faltaba):
-
-```javascript
-        // 9. SEMPER FIDELIS
         ctx.save();
         ctx.translate(22, 720);
         ctx.rotate(-Math.PI / 2);
@@ -1296,18 +1248,17 @@ Los envíos automáticos ahora no crashean si un canal falla.
         ctx.fillText('SEMPER FIDELIS', 0, 0);
         ctx.restore();
 
-        // 10. ESCUDO CENTRAL
         ctx.beginPath();
         ctx.arc(400, 760, 100, 0, Math.PI * 2);
         ctx.strokeStyle = '#D4AF37';
         ctx.lineWidth = 6;
         ctx.stroke();
-        
+
         ctx.beginPath();
         ctx.arc(400, 760, 88, 0, Math.PI * 2);
         ctx.fillStyle = '#1a1a1a';
         ctx.fill();
-        
+
         ctx.fillStyle = '#D4AF37';
         ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
@@ -1317,7 +1268,6 @@ Los envíos automáticos ahora no crashean si un canal falla.
         ctx.font = 'bold 12px Arial';
         ctx.fillText('SINCE 1775', 400, 790);
 
-        // 11. LOGO DEL REGIMIENTO (desde URL)
         try {
           const logoImage = await loadImage(regimientoData.logo);
           const logoX = 580, logoY = 680, logoSize = 140;
@@ -1350,7 +1300,6 @@ Los envíos automáticos ahora no crashean si un canal falla.
           ctx.fillText(regimientoData.abreviatura, 650, 750);
         }
 
-        // 12. BANDERA USA
         ctx.fillStyle = '#3C3B6E';
         ctx.fillRect(60, 1040, 80, 55);
         ctx.fillStyle = '#B22234';
@@ -1370,18 +1319,16 @@ Los envíos automáticos ahora no crashean si un canal falla.
           }
         }
 
-        // 13. TEXTO MARINES
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 44px Arial';
         ctx.textAlign = 'left';
         ctx.fillText('MARINES', 155, 1075);
-        
+
         ctx.fillStyle = '#aaaaaa';
         ctx.font = '13px Arial';
         ctx.fillText('THE OFFICIAL WEBSITE OF THE UNITED', 155, 1095);
         ctx.fillText('STATES MARINE CORPS', 155, 1110);
 
-        // 14. CODIGO DE BARRAS
         ctx.fillStyle = '#ffffff';
         const barX = 620;
         for (let i = 0; i < 35; i++) {
@@ -1392,9 +1339,8 @@ Los envíos automáticos ahora no crashean si un canal falla.
         ctx.font = 'bold 14px monospace';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#aaaaaa';
-        ctx.fillText(`ID: USMC-${interaction.user.id.slice(-8).toUpperCase()}`, barX + 80, 1055);
+        ctx.fillText('ID: USMC-' + interaction.user.id.slice(-8).toUpperCase(), barX + 80, 1055);
 
-        // 15. CHIP
         ctx.fillStyle = '#D4AF37';
         ctx.beginPath();
         ctx.roundRect(680, 1040, 90, 55, 10);
@@ -1412,19 +1358,16 @@ Los envíos automáticos ahora no crashean si un canal falla.
         ctx.lineTo(755, 1068);
         ctx.stroke();
 
-        // 16. FOOTER
         ctx.fillStyle = '#666666';
         ctx.font = '10px Arial';
         ctx.textAlign = 'right';
-        ctx.fillText(`CARD ID: ${interaction.user.id} | USMC OFFICIAL`, 780, 1145);
+        ctx.fillText('CARD ID: ' + interaction.user.id + ' | USMC OFFICIAL', 780, 1145);
 
-        // === EXPORTAR ===
         const buffer = await canvas.encode('png');
         const attachment = new AttachmentBuilder(buffer, { 
-          name: `carnet_${interaction.user.id}.png` 
+          name: 'carnet_' + interaction.user.id + '.png' 
         });
 
-        // Guardar en data.json
         if (!data.carnets) data.carnets = {};
         data.carnets[interaction.user.id] = {
           nombre: nombreCompleto,
@@ -1441,15 +1384,15 @@ Los envíos automáticos ahora no crashean si un canal falla.
 
         const embed = new EmbedBuilder()
           .setColor(0x8B0000)
-          .setTitle('🎖️ CARNET GENERADO')
+          .setTitle('CARNET GENERADO')
           .setDescription(
-            `**${nombreCompleto.toUpperCase()}**\n` +
-            `Rango: **${rango}** (${payGrade})\n` +
-            `Unidad: **${regimientoData.nombre}**\n` +
-            `MOS: **${especialidad}**` 
+            '**' + nombreCompleto.toUpperCase() + '**\n' +
+            'Rango: **' + rango + '** (' + payGrade + ')\n' +
+            'Unidad: **' + regimientoData.nombre + '**\n' +
+            'MOS: **' + especialidad + '**' 
           )
-          .setImage(`attachment://carnet_${interaction.user.id}.png`)
-          .setFooter({ text: `USMC ID: ${interaction.user.id.slice(-8)} | ${fechaIngreso} - ${fechaExpiracion}` });
+          .setImage('attachment://carnet_' + interaction.user.id + '.png')
+          .setFooter({ text: 'USMC ID: ' + interaction.user.id.slice(-8) + ' | ' + fechaIngreso + ' - ' + fechaExpiracion });
 
         return interaction.editReply({ embeds: [embed], files: [attachment] });
 
