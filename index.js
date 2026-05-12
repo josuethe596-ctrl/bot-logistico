@@ -201,7 +201,7 @@ async function enviarTableroAutomatico() {
     const rango = member ? obtenerRango(member) : 'PVT';
     const nombre = member ? member.displayName || member.user.username : 'Desconocido';
     const posicion = (index + 1).toString().padStart(2, '0');
-    return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + efectividades;
+    return '`' + posicion + '` ' + rango + ' | ' + nombre + ' = ' + efectividades;
   });
 
   const embedPrincipal = new EmbedBuilder()
@@ -219,7 +219,7 @@ async function enviarTableroAutomatico() {
     const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
     const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
     const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
-    return '\`' + posicion + '\` ' + rango + ' | ' + nombre + '\n' +
+    return '`' + posicion + '` ' + rango + ' | ' + nombre + '\n' +
            'Efectividades: ' + efectividades + ' | ' + porcentaje + '% | ' + sincronizacion;
   });
 
@@ -575,7 +575,7 @@ client.on('interactionCreate', async interaction => {
         const rango = member ? obtenerRango(member) : 'PVT';
         const nombre = member ? member.displayName || member.user.username : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
-        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + efectividades;
+        return '`' + posicion + '` ' + rango + ' | ' + nombre + ' = ' + efectividades;
       });
 
       const embedPrincipal = new EmbedBuilder()
@@ -594,7 +594,7 @@ client.on('interactionCreate', async interaction => {
         const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
         const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
 
-        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + '\n' +
+        return '`' + posicion + '` ' + rango + ' | ' + nombre + '\n' +
                'Efectividades: ' + efectividades + ' | ' + porcentaje + '% | ' + sincronizacion;
       });
 
@@ -897,7 +897,7 @@ client.on('interactionCreate', async interaction => {
         const rango = member ? obtenerRango(member) : 'PVT';
         const nombre = member ? member.displayName || member.user.username : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
-        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + puntos;
+        return '`' + posicion + '` ' + rango + ' | ' + nombre + ' = ' + puntos;
       });
 
       const embed = new EmbedBuilder()
@@ -1320,34 +1320,20 @@ client.on('interactionCreate', async interaction => {
           `MOS: **${especialidad}**`
         )
         .setImage(`attachment://carnet_${interaction.user.id}.png`)
-        .setFooter({ text: `USMC ID: ${interaction.user.id.slice(-8)} | ${fechaIngreso} - ${fechaExpiracion}` El mensaje se cortó. Aquí te paso el archivo completo para que lo descargues:
+        .setFooter({ text: `USMC ID: ${interaction.user.id.slice(-8)} | ${fechaIngreso} - ${fechaExpiracion}` });
 
-Descarga este archivo: [index.js completo con /carnet](sandbox:///mnt/agents/output/index.js)
+      return interaction.editReply({ embeds: [embed], files: [attachment] });
+    }
 
-O si prefieres, te doy las instrucciones para subirlo a tu GitHub:
+  } catch (err) {
+    console.error('ERROR:', err);
+    if (interaction.replied || interaction.deferred) {
+      interaction.followUp({ content: '❌ Se produjo un error en el sistema.', ephemeral: true });
+    } else {
+      interaction.reply({ content: '❌ Se produjo un error en el sistema.', ephemeral: true });
+    }
+  }
+});
 
-1. Abre tu `index.js` en GitHub web
-2. Selecciona TODO el contenido (Ctrl+A) y bórralo
-3. Pega el código completo que te acabo de dar
-4. En **Commit changes** escribe: `Agregado comando /carnet con generador de imagenes`
-5. Click en **Commit changes**
-
-Railway detectará el cambio, hará deploy automáticamente e instalará `@napi-rs/canvas`.
-
----
-
-## ¿Qué cambió exactamente en tu código?
-
-| Parte | Cambio |
-|-------|--------|
-| **Línea 1** | Se agregó `AttachmentBuilder` al import de `discord.js` |
-| **Línea 4** | Se agregó `const { createCanvas, loadImage } = require('@napi-rs/canvas');` |
-| **Líneas 45-95** | Nuevas constantes: `FOTOS_SOLDADO` (8 URLs) y `REGIMIENTOS` (6 URLs) |
-| **Comandos** | Se agregó el `SlashCommandBuilder` de `/carnet` con todas sus opciones |
-| **Interaction handler** | Se agregó todo el bloque `if (interaction.commandName === 'carnet')` que genera la imagen |
-
----
-
-## ¿Cómo se usa el comando?
-
-El usuario escribe:
+// ===== LOGIN =====
+client.login(TOKEN);
