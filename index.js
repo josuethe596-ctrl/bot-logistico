@@ -30,19 +30,25 @@ const CANAL_ANUNCIOS_CH = '1308186822937153546';
 // Hilo de foro para tickets
 const HILO_TICKETS = '1501741776933879859';
 
+// Hilo de foro para logs de comandos
+const HILO_LOGS = '1500639039806767265';
+
 // ===== ROLES POR PERMISO =====
 const ROLES_STAFF = ['1249089576270696508', '1249089640632422470'];
 const ROL_USUARIO = '1249089172308885576';
 const ROL_ESPECIAL = '1249095569150836781';
 
-// Roles para anuncios
-const ROLES_ANUNCIOS = ['1499828342499573970', '1467162969774227713'];
+// Roles para anuncios (solo estos roles)
+const ROLES_ANUNCIOS = ['1249089576270696508', '1249089640632422470'];
 
 // Roles para /rolests3
 const ROLES_ROLESTS3 = ['1499828342499573970', '1467162969774227713'];
 
 // Roles para /res y /resta
 const ROLES_RES = ['1499828342499573970', '1467162969774227713'];
+
+// Roles para agregar, quitar, tablero (STAFF + ROL_ESPECIAL)
+const ROLES_EFECTIVIDADES = ['1249089576270696508', '1249089640632422470', '1249095569150836781'];
 
 const DATA_FILE = './data.json';
 const TICKETS_FILE = './tickets.json';
@@ -130,6 +136,45 @@ async function obtenerCanal(channelId) {
   }
 }
 
+// ===== FUNCION PARA LOGS DE COMANDOS =====
+async function enviarLog(interaction, comando, detalles = '') {
+  try {
+    const hiloLogs = await obtenerCanal(HILO_LOGS);
+    if (!hiloLogs || !hiloLogs.isTextBased()) {
+      console.log('Hilo de logs no disponible');
+      return;
+    }
+
+    const fechaHora = new Date().toLocaleString('es-ES', { 
+      timeZone: 'America/New_York',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+
+    const guild = interaction.guild;
+    const member = interaction.member;
+    const rango = member ? obtenerRango(member) : 'PVT';
+    const nombre = member ? member.displayName || interaction.user.username : interaction.user.username;
+    const userId = interaction.user.id;
+    const canalNombre = interaction.channel?.name || 'DM';
+    const canalId = interaction.channelId || 'N/A';
+
+    let logMensaje = `> **\`[${fechaHora}]\`**\n`;
+    logMensaje += `> **Comando:** /${comando}\n`;
+    logMensaje += `> **Usuario:** ${nombre} (\`${userId}\`)\n`;
+    logMensaje += `> **Rango:** ${rango}\n`;
+    logMensaje += `> **Canal:** #${canalNombre} (\`${canalId}\`)\n`;
+    if (detalles) {
+      logMensaje += `> **Detalles:** ${detalles}\n`;
+    }
+    logMensaje += `> ─────────────────────────────`;
+
+    await hiloLogs.send(logMensaje);
+  } catch (err) {
+    console.error('Error enviando log:', err.message);
+  }
+}
+
 // ===== FUNCION PARA ENVIAR TABLERO AUTOMATICO =====
 async function enviarTableroAutomatico() {
   const data = loadData();
@@ -157,19 +202,22 @@ async function enviarTableroAutomatico() {
     await canalFinDia.send({ embeds: [embedFinDia] });
   }
 
+  // ===== TABLERO PRINCIPAL - TEXTO LIMPIO SIN RECUADRO =====
   const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
     const member = guildPrincipal?.members.cache.get(id);
     const rango = member ? obtenerRango(member) : 'PVT';
     const nombre = member ? member.displayName || member.user.username : 'Desconocido';
-    const posicion = (index + 1).toString().padStart(2, '0');
-    return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + efectividades;
+    return `> **${rango} | ${nombre}** — ${efectividades} Efectividades`;
   });
 
-  const embedPrincipal = new EmbedBuilder()
-    .setColor(0x8B0000)
-    .setTitle('EFECTIVIDADES DEL DIA')
-    .setDescription(lineasPrincipal.join('\n') || 'Sin registros disponibles')
-    .setFooter({ text: fechaNY + ' | Cierre automatico' });
+  const mensajePrincipal = `**\`\`EFECTIVIDADES DEL DIA\`\`**
+
+${lineasPrincipal.join('\n') || '> Sin registros disponibles'}`;
+  await canalPrincipal.send(mensajePrincipal);
+
+  // ===== TABLERO STAFF - INFORME DETALLADO =====
+  const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
+  const promedio = rankingOrdenado.length > 0 ? (totalEfectividades / rankingOrdenado.length).toFixed(1) : 0;
 
   const lineasStaff = rankingOrdenado.map(([id, efectividades], index) => {
     const memberPrincipal = guildPrincipal?.members.cache.get(id);
@@ -177,29 +225,14 @@ async function enviarTableroAutomatico() {
     const rango = memberPrincipal ? obtenerRango(memberPrincipal) : 'PVT';
     const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Desconocido';
     const posicion = (index + 1).toString().padStart(2, '0');
-    const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
-    const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
+    const porcentaje = totalEfectividades > 0 ? ((efectividades / totalEfectividades) * 100).toFixed(1) : 0;
     const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
 
-    return '\`' + posicion + '\` ' + rango + ' | ' + nombre + '\n' +
-           'Efectividades: ' + efectividades + ' | ' + porcentaje + '% | ' + sincronizacion;
+    return `> \`${posicion}\` **${rango} | ${nombre}**\n> Efectividades: \`${efectividades}\` | Porcentaje: \`${porcentaje}%\` | Staff: \`${sincronizacion}\``;
   });
 
-  const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
-  const promedio = rankingOrdenado.length > 0 ? (totalEfectividades / rankingOrdenado.length).toFixed(1) : 0;
-
-  const embedStaff = new EmbedBuilder()
-    .setColor(0x8B0000)
-    .setTitle('EFECTIVIDADES DETALLADAS - STAFF')
-    .setDescription(lineasStaff.join('\n\n') || 'Sin registros disponibles')
-    .addFields({
-      name: 'Resumen',
-      value: 'Total: ' + totalEfectividades + ' | Promedio: ' + promedio + ' | Participantes: ' + rankingOrdenado.length
-    })
-    .setFooter({ text: fechaNY + ' | Informacion confidencial' });
-
-  await canalPrincipal.send({ embeds: [embedPrincipal] });
-  await canalStaff.send({ embeds: [embedStaff] });
+  const mensajeStaff = `**\`\`INFORME DETALLADO DE EFECTIVIDADES - STAFF\`\`**\n\n**Fecha:** ${fechaNY}\n**Total de efectividades:** \`${totalEfectividades}\`\n**Promedio por miembro:** \`${promedio}\`\n**Participantes:** \`${rankingOrdenado.length}\`\n\n${lineasStaff.join('\n\n') || '> Sin registros disponibles'}\n\n> *Informacion confidencial - Solo personal autorizado*`;
+  await canalStaff.send(mensajeStaff);
 
   console.log('Tablero automatico enviado: ' + fechaNY);
 }
@@ -332,7 +365,7 @@ client.on('interactionCreate', async interaction => {
 
     // ===== AGREGAR =====
     if (interaction.commandName === 'agregar') {
-      if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
+      if (!tieneAlgunRol(interaction.member, ROLES_EFECTIVIDADES)) {
         return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
@@ -347,6 +380,8 @@ client.on('interactionCreate', async interaction => {
       data[usuario.id] += cantidad;
       saveData(data);
 
+      await enviarLog(interaction, 'agregar', `Agrego ${cantidad} efectividades a ${usuario.username} (${usuario.id}). Total: ${data[usuario.id]}`);
+
       const member = interaction.guild?.members.cache.get(usuario.id);
       const nombreDisplay = member ? member.displayName || member.user.username : usuario.username;
 
@@ -359,7 +394,7 @@ client.on('interactionCreate', async interaction => {
 
     // ===== QUITAR =====
     if (interaction.commandName === 'quitar') {
-      if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
+      if (!tieneAlgunRol(interaction.member, ROLES_EFECTIVIDADES)) {
         return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
@@ -374,6 +409,8 @@ client.on('interactionCreate', async interaction => {
       data[usuario.id] -= cantidad;
       if (data[usuario.id] < 0) data[usuario.id] = 0;
       saveData(data);
+
+      await enviarLog(interaction, 'quitar', `Quito ${cantidad} efectividades a ${usuario.username} (${usuario.id}). Total: ${data[usuario.id]}`);
 
       const member = interaction.guild?.members.cache.get(usuario.id);
       const nombreDisplay = member ? member.displayName || member.user.username : usuario.username;
@@ -393,6 +430,8 @@ client.on('interactionCreate', async interaction => {
 
       const efectividades = data[userId] || 0;
 
+      await enviarLog(interaction, 'mep', `Consulto sus efectividades: ${efectividades}`);
+
       const embed = new EmbedBuilder()
         .setColor(0x8B0000)
         .setTitle('CONSULTA DE EFECTIVIDADES')
@@ -403,7 +442,7 @@ client.on('interactionCreate', async interaction => {
 
     // ===== TABLERO =====
     if (interaction.commandName === 'tablero') {
-      if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
+      if (!tieneAlgunRol(interaction.member, ROLES_EFECTIVIDADES)) {
         return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
@@ -416,19 +455,19 @@ client.on('interactionCreate', async interaction => {
       const rankingOrdenado = Object.entries(data).sort((a, b) => b[1] - a[1]);
       const fechaHoy = new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+      // ===== TABLERO PRINCIPAL - TEXTO LIMPIO SIN RECUADRO =====
       const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
         const member = guildPrincipal?.members.cache.get(id);
         const rango = member ? obtenerRango(member) : 'PVT';
         const nombre = member ? member.displayName || member.user.username : 'Desconocido';
-        const posicion = (index + 1).toString().padStart(2, '0');
-        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + efectividades;
+        return `> **${rango} | ${nombre}** — ${efectividades} Efectividades`;
       });
 
-      const embedPrincipal = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('EFECTIVIDADES DEL DIA')
-        .setDescription(lineasPrincipal.join('\n') || 'Sin registros disponibles')
-        .setFooter({ text: fechaHoy + ' | Generado por ' + interaction.user.username });
+      const mensajePrincipal = `**\`\`EFECTIVIDADES DEL DIA\`\`**\n\n${lineasPrincipal.join('\n') || '> Sin registros disponibles'}`;
+
+      // ===== TABLERO STAFF - INFORME DETALLADO =====
+      const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
+      const promedio = rankingOrdenado.length > 0 ? (totalEfectividades / rankingOrdenado.length).toFixed(1) : 0;
 
       const lineasStaff = rankingOrdenado.map(([id, efectividades], index) => {
         const memberPrincipal = guildPrincipal?.members.cache.get(id);
@@ -436,37 +475,24 @@ client.on('interactionCreate', async interaction => {
         const rango = memberPrincipal ? obtenerRango(memberPrincipal) : 'PVT';
         const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
-        const total = rankingOrdenado.reduce((a, b) => a + b[1], 0);
-        const porcentaje = total > 0 ? ((efectividades / total) * 100).toFixed(1) : 0;
+        const porcentaje = totalEfectividades > 0 ? ((efectividades / totalEfectividades) * 100).toFixed(1) : 0;
         const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
 
-        return '\`' + posicion + '\` ' + rango + ' | ' + nombre + '\n' +
-               'Efectividades: ' + efectividades + ' | ' + porcentaje + '% | ' + sincronizacion;
+        return `> \`${posicion}\` **${rango} | ${nombre}**\n> Efectividades: \`${efectividades}\` | Porcentaje: \`${porcentaje}%\` | Staff: \`${sincronizacion}\``;
       });
 
-      const totalEfectividades = rankingOrdenado.reduce((a, b) => a + b[1], 0);
-      const promedio = rankingOrdenado.length > 0 ? (totalEfectividades / rankingOrdenado.length).toFixed(1) : 0;
-
-      const embedStaff = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setTitle('EFECTIVIDADES DETALLADAS - STAFF')
-        .setDescription(lineasStaff.join('\n\n') || 'Sin registros disponibles')
-        .addFields({
-          name: 'Resumen',
-          value: 'Total: ' + totalEfectividades + ' | Promedio: ' + promedio + ' | Participantes: ' + rankingOrdenado.length
-        })
-        .setFooter({ text: fechaHoy + ' | Generado por ' + interaction.user.tag });
+      const mensajeStaff = `**\`\`INFORME DETALLADO DE EFECTIVIDADES - STAFF\`\`**\n\n**Fecha:** ${fechaHoy}\n**Total de efectividades:** \`${totalEfectividades}\`\n**Promedio por miembro:** \`${promedio}\`\n**Participantes:** \`${rankingOrdenado.length}\`\n\n${lineasStaff.join('\n\n') || '> Sin registros disponibles'}\n\n> *Informacion confidencial - Solo personal autorizado*`;
 
       let enviadoPrincipal = false;
       let enviadoStaff = false;
 
       if (canalPrincipal && canalPrincipal.isTextBased()) {
-        await canalPrincipal.send({ embeds: [embedPrincipal] });
+        await canalPrincipal.send(mensajePrincipal);
         enviadoPrincipal = true;
       }
 
       if (canalStaff && canalStaff.isTextBased()) {
-        await canalStaff.send({ embeds: [embedStaff] });
+        await canalStaff.send(mensajeStaff);
         enviadoStaff = true;
       }
 
@@ -475,6 +501,8 @@ client.on('interactionCreate', async interaction => {
       if (enviadoStaff) mensajes.push('Tablero publicado en canal de Staff');
       if (!enviadoPrincipal) mensajes.push('Fallo al publicar en canal principal');
       if (!enviadoStaff) mensajes.push('Fallo al publicar en canal de Staff');
+
+      await enviarLog(interaction, 'tablero', `Publico tablero. Principal: ${enviadoPrincipal ? 'OK' : 'FALLO'} | Staff: ${enviadoStaff ? 'OK' : 'FALLO'}`);
 
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x8B0000)
@@ -494,6 +522,8 @@ client.on('interactionCreate', async interaction => {
       }
 
       saveData(data);
+
+      await enviarLog(interaction, 'resets', 'Reinicio todas las efectividades a cero');
 
       const embed = new EmbedBuilder()
         .setColor(0x8B0000)
@@ -521,6 +551,8 @@ client.on('interactionCreate', async interaction => {
           '- No utilizar las herramientas para perjudicar a miembros de la faccion\n\n' +
           'Para continuar escribe /siacepto'
         );
+
+      await enviarLog(interaction, 'ts3', 'Consulto terminos y condiciones TS3');
 
       return interaction.reply({ embeds: [embed] });
     }
@@ -561,6 +593,8 @@ client.on('interactionCreate', async interaction => {
       await interaction.followUp({ embeds: [embedGuia2] });
       await interaction.followUp({ embeds: [embedPaso1] });
       await interaction.followUp({ embeds: [embedPaso2] });
+
+      await enviarLog(interaction, 'ts3pc', 'Consulto guia de instalacion TS3 para PC');
 
       return;
     }
@@ -618,6 +652,8 @@ client.on('interactionCreate', async interaction => {
       await interaction.followUp({ embeds: [embedVideo] });
       await interaction.followUp({ embeds: [embedArchivo] });
 
+      await enviarLog(interaction, 'android', 'Consulto recursos de macros para Android');
+
       return;
     }
 
@@ -651,6 +687,8 @@ client.on('interactionCreate', async interaction => {
       await interaction.followUp({ embeds: [embedArchivo] });
       await interaction.followUp({ embeds: [embedTutorial] });
       await interaction.followUp({ embeds: [embedVideo] });
+
+      await enviarLog(interaction, 'pc', 'Consulto recursos de macros para PC');
 
       return;
     }
@@ -687,6 +725,8 @@ client.on('interactionCreate', async interaction => {
       await interaction.followUp({ embeds: [embed2] });
       await interaction.followUp({ embeds: [embed3] });
 
+      await enviarLog(interaction, 'rolests3', 'Consulto tutorial basico de TS3');
+
       return;
     }
 
@@ -721,6 +761,8 @@ client.on('interactionCreate', async interaction => {
         await hiloTickets.send({ embeds: [embedRegistro] });
       }
 
+      await enviarLog(interaction, 'res', `Agrego 1 punto a ${nombreDisplay} (${usuario.id}) por ticket atendido. Total: ${ticketsData[usuario.id]}`);
+
       const embed = new EmbedBuilder()
         .setColor(0x8B0000)
         .setDescription('Se agrego 1 punto a ' + nombreDisplay + ' por ticket atendido. Total: ' + ticketsData[usuario.id]);
@@ -745,6 +787,8 @@ client.on('interactionCreate', async interaction => {
         const posicion = (index + 1).toString().padStart(2, '0');
         return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + puntos;
       });
+
+      await enviarLog(interaction, 'resta', `Consulto tablero de tickets. ${rankingOrdenado.length} registros`);
 
       const embed = new EmbedBuilder()
         .setColor(0x8B0000)
@@ -776,6 +820,8 @@ client.on('interactionCreate', async interaction => {
 
       await canal.send({ embeds: [embed] });
 
+      await enviarLog(interaction, 'anuncios', `Envio anuncio al canal #${canal.name}: "${textoFormateado}"`);
+
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x8B0000)
         .setDescription('Anuncio enviado correctamente.');
@@ -803,6 +849,8 @@ client.on('interactionCreate', async interaction => {
         .setDescription(textoFormateado);
 
       await canal.send({ embeds: [embed] });
+
+      await enviarLog(interaction, 'anunciosls1', `Envio anuncio a LS1: "${textoFormateado}"`);
 
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x8B0000)
@@ -832,6 +880,8 @@ client.on('interactionCreate', async interaction => {
 
       await canal.send({ embeds: [embed] });
 
+      await enviarLog(interaction, 'anunciosls2', `Envio anuncio a LS2: "${textoFormateado}"`);
+
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x8B0000)
         .setDescription('Anuncio enviado a LS2 correctamente.');
@@ -859,6 +909,8 @@ client.on('interactionCreate', async interaction => {
         .setDescription(textoFormateado);
 
       await canal.send({ embeds: [embed] });
+
+      await enviarLog(interaction, 'anunciosch', `Envio anuncio a CH: "${textoFormateado}"`);
 
       const embedConfirmacion = new EmbedBuilder()
         .setColor(0x8B0000)
@@ -926,6 +978,8 @@ client.on('interactionCreate', async interaction => {
       await interaction.followUp({ embeds: [embedConfig2] });
       await interaction.followUp({ embeds: [embedConfig3] });
       await interaction.followUp({ embeds: [embedCuenta] });
+
+      await enviarLog(interaction, 'siacepto', 'Acepto terminos y recibio credenciales TS3 Android');
 
       return;
     }
