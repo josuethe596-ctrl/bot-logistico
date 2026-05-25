@@ -146,6 +146,15 @@ function obtenerRango(member) {
   return 'PVT';
 }
 
+// ===== FUNCION PARA OBTENER NOMBRE DE DISCORD (sin rango del display name) =====
+function obtenerNombreDiscord(member) {
+  // Usar solo el username de Discord, no el displayName que puede tener rango incluido
+  if (member && member.user) {
+    return member.user.username;
+  }
+  return 'Desconocido';
+}
+
 // ===== FUNCION PARA OBTENER CANAL/HILO CON SOPORTE FORO =====
 async function obtenerCanal(channelId) {
   try {
@@ -187,7 +196,7 @@ async function enviarLog(interaction, comando, detalles = '') {
     const guild = interaction.guild;
     const member = interaction.member;
     const rango = member ? obtenerRango(member) : 'PVT';
-    const nombre = member ? member.displayName || interaction.user.username : interaction.user.username;
+    const nombre = member ? obtenerNombreDiscord(member) : interaction.user.username;
     const userId = interaction.user.id;
     const canalNombre = interaction.channel?.name || 'DM';
     const canalId = interaction.channelId || 'N/A';
@@ -235,11 +244,11 @@ async function enviarTableroAutomatico() {
     await canalFinDia.send({ embeds: [embedFinDia] });
   }
 
-  // ===== TABLERO PRINCIPAL - TEXTO LIMPIO SIN RECUADRO =====
+  // ===== TABLERO PRINCIPAL - SOLO UN RANGO Y NOMBRE DE DISCORD =====
   const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
     const member = guildPrincipal?.members.cache.get(id);
     const rango = member ? obtenerRango(member) : 'PVT';
-    const nombre = member ? member.displayName || member.user.username : 'Desconocido';
+    const nombre = member ? obtenerNombreDiscord(member) : 'Desconocido';
     return `> **${rango} | ${nombre}** — ${efectividades} Efectividades`;
   });
 
@@ -256,7 +265,7 @@ ${lineasPrincipal.join('\n') || '> Sin registros disponibles'}`;
     const memberPrincipal = guildPrincipal?.members.cache.get(id);
     const memberStaff = guildStaff?.members.cache.get(id);
     const rango = memberPrincipal ? obtenerRango(memberPrincipal) : 'PVT';
-    const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Desconocido';
+    const nombre = memberPrincipal ? obtenerNombreDiscord(memberPrincipal) : 'Desconocido';
     const posicion = (index + 1).toString().padStart(2, '0');
     const porcentaje = totalEfectividades > 0 ? ((efectividades / totalEfectividades) * 100).toFixed(1) : 0;
     const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
@@ -431,7 +440,7 @@ client.on('interactionCreate', async interaction => {
       await enviarLog(interaction, 'agregar', `Agrego ${cantidad} efectividades a ${usuario.username} (${usuario.id}). Total: ${data[usuario.id]}`);
 
       const member = interaction.guild?.members.cache.get(usuario.id);
-      const nombreDisplay = member ? member.displayName || member.user.username : usuario.username;
+      const nombreDisplay = obtenerNombreDiscord(member) || usuario.username;
 
       const embed = new EmbedBuilder()
         .setColor(0x8B0000)
@@ -461,7 +470,7 @@ client.on('interactionCreate', async interaction => {
       await enviarLog(interaction, 'quitar', `Quito ${cantidad} efectividades a ${usuario.username} (${usuario.id}). Total: ${data[usuario.id]}`);
 
       const member = interaction.guild?.members.cache.get(usuario.id);
-      const nombreDisplay = member ? member.displayName || member.user.username : usuario.username;
+      const nombreDisplay = obtenerNombreDiscord(member) || usuario.username;
 
       const embed = new EmbedBuilder()
         .setColor(0x8B0000)
@@ -503,11 +512,11 @@ client.on('interactionCreate', async interaction => {
       const rankingOrdenado = Object.entries(data).sort((a, b) => b[1] - a[1]);
       const fechaHoy = new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-      // ===== TABLERO PRINCIPAL - TEXTO LIMPIO SIN RECUADRO =====
+      // ===== TABLERO PRINCIPAL - SOLO UN RANGO Y NOMBRE DE DISCORD =====
       const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
         const member = guildPrincipal?.members.cache.get(id);
         const rango = member ? obtenerRango(member) : 'PVT';
-        const nombre = member ? member.displayName || member.user.username : 'Desconocido';
+        const nombre = member ? obtenerNombreDiscord(member) : 'Desconocido';
         return `> **${rango} | ${nombre}** — ${efectividades} Efectividades`;
       });
 
@@ -521,7 +530,7 @@ client.on('interactionCreate', async interaction => {
         const memberPrincipal = guildPrincipal?.members.cache.get(id);
         const memberStaff = guildStaff?.members.cache.get(id);
         const rango = memberPrincipal ? obtenerRango(memberPrincipal) : 'PVT';
-        const nombre = memberPrincipal ? memberPrincipal.displayName || memberPrincipal.user.username : 'Desconocido';
+        const nombre = memberPrincipal ? obtenerNombreDiscord(memberPrincipal) : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
         const porcentaje = totalEfectividades > 0 ? ((efectividades / totalEfectividades) * 100).toFixed(1) : 0;
         const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
@@ -592,39 +601,43 @@ client.on('interactionCreate', async interaction => {
       const usuario = interaction.options.getUser('usuario');
       const comando = interaction.options.getString('comando');
 
+      // Obtener el member del usuario para usar su nombre de Discord
+      const memberUsuario = interaction.guild?.members.cache.get(usuario.id);
+      const nombreUsuario = memberUsuario ? obtenerNombreDiscord(memberUsuario) : usuario.username;
+
       if (subcommand === 'dar') {
         if (!permisos[usuario.id]) permisos[usuario.id] = [];
         
         if (permisos[usuario.id].includes(comando)) {
-          return interaction.reply({ content: `${usuario.username} ya tiene permiso para usar /${comando}.`, ephemeral: true });
+          return interaction.reply({ content: `${nombreUsuario} ya tiene permiso para usar /${comando}.`, ephemeral: true });
         }
 
         permisos[usuario.id].push(comando);
         savePermisos(permisos);
 
-        await enviarLog(interaction, 'permisos', `Dio permiso a ${usuario.username} (${usuario.id}) para usar /${comando}`);
+        await enviarLog(interaction, 'permisos', `Dio permiso a ${nombreUsuario} (${usuario.id}) para usar /${comando}`);
 
         const embed = new EmbedBuilder()
           .setColor(0x8B0000)
-          .setDescription(`Se otorgo permiso a **${usuario.username}** para usar \`/${comando}\`.`);
+          .setDescription(`Se otorgo permiso a **${nombreUsuario}** para usar \`/${comando}\`.`);
 
         return interaction.reply({ embeds: [embed] });
       }
 
       if (subcommand === 'quitar') {
         if (!permisos[usuario.id] || !permisos[usuario.id].includes(comando)) {
-          return interaction.reply({ content: `${usuario.username} no tiene permiso para usar /${comando}.`, ephemeral: true });
+          return interaction.reply({ content: `${nombreUsuario} no tiene permiso para usar /${comando}.`, ephemeral: true });
         }
 
         permisos[usuario.id] = permisos[usuario.id].filter(c => c !== comando);
         if (permisos[usuario.id].length === 0) delete permisos[usuario.id];
         savePermisos(permisos);
 
-        await enviarLog(interaction, 'permisos', `Quito permiso a ${usuario.username} (${usuario.id}) para usar /${comando}`);
+        await enviarLog(interaction, 'permisos', `Quito permiso a ${nombreUsuario} (${usuario.id}) para usar /${comando}`);
 
         const embed = new EmbedBuilder()
           .setColor(0x8B0000)
-          .setDescription(`Se revoco el permiso a **${usuario.username}** para usar \`/${comando}\`.`);
+          .setDescription(`Se revoco el permiso a **${nombreUsuario}** para usar \`/${comando}\`.`);
 
         return interaction.reply({ embeds: [embed] });
       }
@@ -634,9 +647,9 @@ client.on('interactionCreate', async interaction => {
         
         let descripcion;
         if (permisosUsuario.length === 0) {
-          descripcion = `**${usuario.username}** no tiene permisos personalizados.`;
+          descripcion = `**${nombreUsuario}** no tiene permisos personalizados.`;
         } else {
-          descripcion = `**${usuario.username}** tiene permiso para usar:\n` + permisosUsuario.map(c => `- \`/${c}\``).join('\n');
+          descripcion = `**${nombreUsuario}** tiene permiso para usar:\n` + permisosUsuario.map(c => `- \`/${c}\``).join('\n');
         }
 
         const embed = new EmbedBuilder()
@@ -858,7 +871,7 @@ client.on('interactionCreate', async interaction => {
       saveTickets(ticketsData);
 
       const member = interaction.guild?.members.cache.get(usuario.id);
-      const nombreDisplay = member ? member.displayName || member.user.username : usuario.username;
+      const nombreDisplay = obtenerNombreDiscord(member) || usuario.username;
 
       const hiloTickets = await obtenerCanal(HILO_TICKETS);
 
@@ -898,7 +911,7 @@ client.on('interactionCreate', async interaction => {
       const lineas = rankingOrdenado.map(([id, puntos], index) => {
         const member = guildPrincipal?.members.cache.get(id);
         const rango = member ? obtenerRango(member) : 'PVT';
-        const nombre = member ? member.displayName || member.user.username : 'Desconocido';
+        const nombre = member ? obtenerNombreDiscord(member) : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
         return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + puntos;
       });
