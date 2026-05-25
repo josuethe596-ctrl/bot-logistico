@@ -146,9 +146,12 @@ function obtenerRango(member) {
   return 'PVT';
 }
 
-// ===== FUNCION PARA OBTENER NOMBRE DE DISCORD (sin rango del display name) =====
-function obtenerNombreDiscord(member) {
-  // Usar solo el username de Discord, no el displayName que puede tener rango incluido
+// ===== FUNCION PARA OBTENER NOMBRE DE DISPLAY (el que se ve en Discord con rango) =====
+function obtenerNombreDisplay(member) {
+  // Usar displayName que es el nombre que se ve en Discord (incluye rango si lo tiene en el nick)
+  if (member && member.displayName) {
+    return member.displayName;
+  }
   if (member && member.user) {
     return member.user.username;
   }
@@ -196,7 +199,7 @@ async function enviarLog(interaction, comando, detalles = '') {
     const guild = interaction.guild;
     const member = interaction.member;
     const rango = member ? obtenerRango(member) : 'PVT';
-    const nombre = member ? obtenerNombreDiscord(member) : interaction.user.username;
+    const nombre = member ? obtenerNombreDisplay(member) : interaction.user.username;
     const userId = interaction.user.id;
     const canalNombre = interaction.channel?.name || 'DM';
     const canalId = interaction.channelId || 'N/A';
@@ -244,11 +247,11 @@ async function enviarTableroAutomatico() {
     await canalFinDia.send({ embeds: [embedFinDia] });
   }
 
-  // ===== TABLERO PRINCIPAL - SOLO UN RANGO Y NOMBRE DE DISCORD =====
+  // ===== TABLERO PRINCIPAL - SOLO UN RANGO Y NOMBRE DE DISPLAY =====
   const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
     const member = guildPrincipal?.members.cache.get(id);
     const rango = member ? obtenerRango(member) : 'PVT';
-    const nombre = member ? obtenerNombreDiscord(member) : 'Desconocido';
+    const nombre = member ? obtenerNombreDisplay(member) : 'Desconocido';
     return `> **${rango} | ${nombre}** — ${efectividades} Efectividades`;
   });
 
@@ -265,7 +268,7 @@ ${lineasPrincipal.join('\n') || '> Sin registros disponibles'}`;
     const memberPrincipal = guildPrincipal?.members.cache.get(id);
     const memberStaff = guildStaff?.members.cache.get(id);
     const rango = memberPrincipal ? obtenerRango(memberPrincipal) : 'PVT';
-    const nombre = memberPrincipal ? obtenerNombreDiscord(memberPrincipal) : 'Desconocido';
+    const nombre = memberPrincipal ? obtenerNombreDisplay(memberPrincipal) : 'Desconocido';
     const posicion = (index + 1).toString().padStart(2, '0');
     const porcentaje = totalEfectividades > 0 ? ((efectividades / totalEfectividades) * 100).toFixed(1) : 0;
     const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
@@ -437,10 +440,10 @@ client.on('interactionCreate', async interaction => {
       data[usuario.id] += cantidad;
       saveData(data);
 
-      await enviarLog(interaction, 'agregar', `Agrego ${cantidad} efectividades a ${usuario.username} (${usuario.id}). Total: ${data[usuario.id]}`);
-
       const member = interaction.guild?.members.cache.get(usuario.id);
-      const nombreDisplay = obtenerNombreDiscord(member) || usuario.username;
+      const nombreDisplay = obtenerNombreDisplay(member) || usuario.username;
+
+      await enviarLog(interaction, 'agregar', `Agrego ${cantidad} efectividades a ${nombreDisplay} (${usuario.id}). Total: ${data[usuario.id]}`);
 
       const embed = new EmbedBuilder()
         .setColor(0x8B0000)
@@ -467,10 +470,10 @@ client.on('interactionCreate', async interaction => {
       if (data[usuario.id] < 0) data[usuario.id] = 0;
       saveData(data);
 
-      await enviarLog(interaction, 'quitar', `Quito ${cantidad} efectividades a ${usuario.username} (${usuario.id}). Total: ${data[usuario.id]}`);
-
       const member = interaction.guild?.members.cache.get(usuario.id);
-      const nombreDisplay = obtenerNombreDiscord(member) || usuario.username;
+      const nombreDisplay = obtenerNombreDisplay(member) || usuario.username;
+
+      await enviarLog(interaction, 'quitar', `Quito ${cantidad} efectividades a ${nombreDisplay} (${usuario.id}). Total: ${data[usuario.id]}`);
 
       const embed = new EmbedBuilder()
         .setColor(0x8B0000)
@@ -512,11 +515,11 @@ client.on('interactionCreate', async interaction => {
       const rankingOrdenado = Object.entries(data).sort((a, b) => b[1] - a[1]);
       const fechaHoy = new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-      // ===== TABLERO PRINCIPAL - SOLO UN RANGO Y NOMBRE DE DISCORD =====
+      // ===== TABLERO PRINCIPAL - SOLO UN RANGO Y NOMBRE DE DISPLAY =====
       const lineasPrincipal = rankingOrdenado.map(([id, efectividades], index) => {
         const member = guildPrincipal?.members.cache.get(id);
         const rango = member ? obtenerRango(member) : 'PVT';
-        const nombre = member ? obtenerNombreDiscord(member) : 'Desconocido';
+        const nombre = member ? obtenerNombreDisplay(member) : 'Desconocido';
         return `> **${rango} | ${nombre}** — ${efectividades} Efectividades`;
       });
 
@@ -530,7 +533,7 @@ client.on('interactionCreate', async interaction => {
         const memberPrincipal = guildPrincipal?.members.cache.get(id);
         const memberStaff = guildStaff?.members.cache.get(id);
         const rango = memberPrincipal ? obtenerRango(memberPrincipal) : 'PVT';
-        const nombre = memberPrincipal ? obtenerNombreDiscord(memberPrincipal) : 'Desconocido';
+        const nombre = memberPrincipal ? obtenerNombreDisplay(memberPrincipal) : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
         const porcentaje = totalEfectividades > 0 ? ((efectividades / totalEfectividades) * 100).toFixed(1) : 0;
         const sincronizacion = memberStaff ? 'Activo' : 'Inactivo';
@@ -601,9 +604,9 @@ client.on('interactionCreate', async interaction => {
       const usuario = interaction.options.getUser('usuario');
       const comando = interaction.options.getString('comando');
 
-      // Obtener el member del usuario para usar su nombre de Discord
+      // Obtener el member del usuario para usar su displayName (nombre con rango)
       const memberUsuario = interaction.guild?.members.cache.get(usuario.id);
-      const nombreUsuario = memberUsuario ? obtenerNombreDiscord(memberUsuario) : usuario.username;
+      const nombreUsuario = obtenerNombreDisplay(memberUsuario) || usuario.username;
 
       if (subcommand === 'dar') {
         if (!permisos[usuario.id]) permisos[usuario.id] = [];
@@ -871,7 +874,7 @@ client.on('interactionCreate', async interaction => {
       saveTickets(ticketsData);
 
       const member = interaction.guild?.members.cache.get(usuario.id);
-      const nombreDisplay = obtenerNombreDiscord(member) || usuario.username;
+      const nombreDisplay = obtenerNombreDisplay(member) || usuario.username;
 
       const hiloTickets = await obtenerCanal(HILO_TICKETS);
 
@@ -881,7 +884,7 @@ client.on('interactionCreate', async interaction => {
           .setTitle('REGISTRO DE TICKET')
           .setDescription(
             'Usuario: ' + nombreDisplay + '\n' +
-            'Atendido por: ' + interaction.user.username + '\n' +
+            'Atendido por: ' + obtenerNombreDisplay(interaction.member) + '\n' +
             'Puntos totales: ' + ticketsData[usuario.id] + '\n' +
             'Fecha: ' + new Date().toLocaleDateString('es-ES', { timeZone: 'America/New_York' })
           );
@@ -911,7 +914,7 @@ client.on('interactionCreate', async interaction => {
       const lineas = rankingOrdenado.map(([id, puntos], index) => {
         const member = guildPrincipal?.members.cache.get(id);
         const rango = member ? obtenerRango(member) : 'PVT';
-        const nombre = member ? obtenerNombreDiscord(member) : 'Desconocido';
+        const nombre = member ? obtenerNombreDisplay(member) : 'Desconocido';
         const posicion = (index + 1).toString().padStart(2, '0');
         return '\`' + posicion + '\` ' + rango + ' | ' + nombre + ' = ' + puntos;
       });
@@ -922,7 +925,7 @@ client.on('interactionCreate', async interaction => {
         .setColor(0x8B0000)
         .setTitle('TOP DE PUNTOS - TICKETS')
         .setDescription(lineas.join('\n') || 'Sin registros disponibles')
-        .setFooter({ text: fechaHoy + ' | Generado por ' + interaction.user.username });
+        .setFooter({ text: fechaHoy + ' | Generado por ' + obtenerNombreDisplay(interaction.member) });
 
       return interaction.reply({ embeds: [embed] });
     }
@@ -978,7 +981,7 @@ client.on('interactionCreate', async interaction => {
           'Advertencia: El uso de estas credenciales implica la aceptacion de los terminos establecidos. Cualquier comparticion no autorizada o modificacion indebida sera sancionada.'
         );
 
-      await interaction.reply({ content: interaction.user.username + ' ha aceptado los terminos. Procediendo con la entrega de credenciales y guia:' });
+      await interaction.reply({ content: obtenerNombreDisplay(interaction.member) + ' ha aceptado los terminos. Procediendo con la entrega de credenciales y guia:' });
       await interaction.followUp({ embeds: [embedInstalacion] });
       await interaction.followUp({ embeds: [embedPaso2] });
       await interaction.followUp({ embeds: [embedPaso3] });
