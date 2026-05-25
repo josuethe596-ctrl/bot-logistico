@@ -23,9 +23,6 @@ const GUILD_STAFF = '1464318287683780836';
 const CANAL_PRINCIPAL = '1500533467166015638';
 const CANAL_STAFF = '1500352253293498561';
 const CANAL_FIN_DIA = '1499930571785375744';
-const CANAL_ANUNCIOS = '1499835071245586544';
-const CANAL_ANUNCIOS_LS = '1465188998099243090';
-const CANAL_ANUNCIOS_CH = '1308186822937153546';
 
 // Hilo de foro para tickets
 const HILO_TICKETS = '1501741776933879859';
@@ -38,20 +35,15 @@ const ROLES_STAFF = ['1249089576270696508', '1249089640632422470'];
 const ROL_USUARIO = '1249089172308885576';
 const ROL_ESPECIAL = '1249095569150836781';
 
-// Roles para anuncios (solo estos roles)
-const ROLES_ANUNCIOS = ['1249089576270696508', '1249089640632422470'];
-
 // Roles para /rolests3
 const ROLES_ROLESTS3 = ['1499828342499573970', '1467162969774227713'];
 
 // Roles para /res y /resta
 const ROLES_RES = ['1499828342499573970', '1467162969774227713'];
 
-// Roles para agregar, quitar, tablero (STAFF + ROL_ESPECIAL)
-const ROLES_EFECTIVIDADES = ['1249089576270696508', '1249089640632422470', '1249095569150836781'];
-
 const DATA_FILE = './data.json';
 const TICKETS_FILE = './tickets.json';
+const PERMISOS_FILE = './permisos.json';
 
 // ===== CREAR JSON SI NO EXISTE =====
 if (!fs.existsSync(DATA_FILE)) {
@@ -62,6 +54,11 @@ if (!fs.existsSync(DATA_FILE)) {
 if (!fs.existsSync(TICKETS_FILE)) {
   fs.writeFileSync(TICKETS_FILE, '{}');
   console.log('tickets.json creado automaticamente');
+}
+
+if (!fs.existsSync(PERMISOS_FILE)) {
+  fs.writeFileSync(PERMISOS_FILE, '{}');
+  console.log('permisos.json creado automaticamente');
 }
 
 // ===== DATA =====
@@ -93,9 +90,45 @@ function saveTickets(data) {
   fs.writeFileSync(TICKETS_FILE, JSON.stringify(data, null, 2));
 }
 
+function loadPermisos() {
+  try {
+    return JSON.parse(fs.readFileSync(PERMISOS_FILE));
+  } catch {
+    console.log('permisos.json corrupto, reiniciando...');
+    fs.writeFileSync(PERMISOS_FILE, '{}');
+    return {};
+  }
+}
+
+function savePermisos(data) {
+  fs.writeFileSync(PERMISOS_FILE, JSON.stringify(data, null, 2));
+}
+
 // ===== FUNCIONES DE VERIFICACION =====
 function tieneAlgunRol(member, rolesArray) {
   return rolesArray.some(rolId => member.roles.cache.has(rolId));
+}
+
+// ===== VERIFICAR SI USUARIO TIENE PERMISO PARA COMANDO STAFF =====
+function tienePermisoStaff(member, commandName) {
+  // Comandos protegidos por permisos staff
+  const comandosStaff = ['agregar', 'quitar', 'tablero', 'resets'];
+  
+  if (!comandosStaff.includes(commandName)) return true;
+  
+  // Si es staff por rol, tiene acceso
+  if (tieneAlgunRol(member, ROLES_STAFF)) return true;
+  
+  // Si es rol especial, tiene acceso
+  if (tieneAlgunRol(member, [ROL_ESPECIAL])) return true;
+  
+  // Verificar permisos personalizados
+  const permisos = loadPermisos();
+  const userId = member.user.id;
+  
+  if (permisos[userId] && permisos[userId].includes(commandName)) return true;
+  
+  return false;
 }
 
 // ===== FUNCION PARA OBTENER RANGO DE UN MIEMBRO =====
@@ -279,6 +312,40 @@ const commands = [
     .setDescription('Reiniciar todas las efectividades a cero'),
 
   new SlashCommandBuilder()
+    .setName('permisos')
+    .setDescription('Gestionar permisos de comandos staff para usuarios')
+    .addSubcommand(sub =>
+      sub.setName('dar')
+        .setDescription('Dar permiso a un usuario para usar un comando staff')
+        .addUserOption(o => o.setName('usuario').setDescription('Usuario a dar permiso').setRequired(true))
+        .addStringOption(o => o.setName('comando')
+          .setDescription('Comando al que dar permiso')
+          .setRequired(true)
+          .addChoices(
+            { name: '/agregar', value: 'agregar' },
+            { name: '/quitar', value: 'quitar' },
+            { name: '/tablero', value: 'tablero' },
+            { name: '/resets', value: 'resets' }
+          )))
+    .addSubcommand(sub =>
+      sub.setName('quitar')
+        .setDescription('Quitar permiso a un usuario para usar un comando staff')
+        .addUserOption(o => o.setName('usuario').setDescription('Usuario a quitar permiso').setRequired(true))
+        .addStringOption(o => o.setName('comando')
+          .setDescription('Comando al que quitar permiso')
+          .setRequired(true)
+          .addChoices(
+            { name: '/agregar', value: 'agregar' },
+            { name: '/quitar', value: 'quitar' },
+            { name: '/tablero', value: 'tablero' },
+            { name: '/resets', value: 'resets' }
+          )))
+    .addSubcommand(sub =>
+      sub.setName('ver')
+        .setDescription('Ver permisos de un usuario')
+        .addUserOption(o => o.setName('usuario').setDescription('Usuario a consultar').setRequired(true))),
+
+  new SlashCommandBuilder()
     .setName('ts3')
     .setDescription('Terminos y condiciones de TS3'),
 
@@ -309,27 +376,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('resta')
-    .setDescription('Mostrar tablero de puntos de tickets'),
-
-  new SlashCommandBuilder()
-    .setName('anuncios')
-    .setDescription('Enviar anuncio al canal de anuncios')
-    .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true)),
-
-  new SlashCommandBuilder()
-    .setName('anunciosls1')
-    .setDescription('Enviar anuncio al canal LS1')
-    .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true)),
-
-  new SlashCommandBuilder()
-    .setName('anunciosls2')
-    .setDescription('Enviar anuncio al canal LS2')
-    .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true)),
-
-  new SlashCommandBuilder()
-    .setName('anunciosch')
-    .setDescription('Enviar anuncio al canal CH')
-    .addStringOption(o => o.setName('texto').setDescription('Texto del anuncio').setRequired(true))
+    .setDescription('Mostrar tablero de puntos de tickets')
 ].map(c => c.toJSON());
 
 // ===== REGISTRAR COMANDOS =====
@@ -359,13 +406,14 @@ client.on('interactionCreate', async interaction => {
 
   const data = loadData();
   const ticketsData = loadTickets();
+  const permisos = loadPermisos();
   const userId = interaction.user.id;
 
   try {
 
     // ===== AGREGAR =====
     if (interaction.commandName === 'agregar') {
-      if (!tieneAlgunRol(interaction.member, ROLES_EFECTIVIDADES)) {
+      if (!tienePermisoStaff(interaction.member, 'agregar')) {
         return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
@@ -394,7 +442,7 @@ client.on('interactionCreate', async interaction => {
 
     // ===== QUITAR =====
     if (interaction.commandName === 'quitar') {
-      if (!tieneAlgunRol(interaction.member, ROLES_EFECTIVIDADES)) {
+      if (!tienePermisoStaff(interaction.member, 'quitar')) {
         return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
@@ -442,7 +490,7 @@ client.on('interactionCreate', async interaction => {
 
     // ===== TABLERO =====
     if (interaction.commandName === 'tablero') {
-      if (!tieneAlgunRol(interaction.member, ROLES_EFECTIVIDADES)) {
+      if (!tienePermisoStaff(interaction.member, 'tablero')) {
         return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
@@ -513,7 +561,7 @@ client.on('interactionCreate', async interaction => {
 
     // ===== RESETS =====
     if (interaction.commandName === 'resets') {
-      if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
+      if (!tienePermisoStaff(interaction.member, 'resets')) {
         return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
       }
 
@@ -531,6 +579,73 @@ client.on('interactionCreate', async interaction => {
         .setDescription('Todos los registros han sido restablecidos a cero. El sistema esta listo para nueva acumulacion.');
 
       return interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
+    // ===== PERMISOS =====
+    if (interaction.commandName === 'permisos') {
+      // Solo STAFF puede usar /permisos
+      if (!tieneAlgunRol(interaction.member, ROLES_STAFF)) {
+        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para STAFF.', ephemeral: true });
+      }
+
+      const subcommand = interaction.options.getSubcommand();
+      const usuario = interaction.options.getUser('usuario');
+      const comando = interaction.options.getString('comando');
+
+      if (subcommand === 'dar') {
+        if (!permisos[usuario.id]) permisos[usuario.id] = [];
+        
+        if (permisos[usuario.id].includes(comando)) {
+          return interaction.reply({ content: `${usuario.username} ya tiene permiso para usar /${comando}.`, ephemeral: true });
+        }
+
+        permisos[usuario.id].push(comando);
+        savePermisos(permisos);
+
+        await enviarLog(interaction, 'permisos', `Dio permiso a ${usuario.username} (${usuario.id}) para usar /${comando}`);
+
+        const embed = new EmbedBuilder()
+          .setColor(0x8B0000)
+          .setDescription(`Se otorgo permiso a **${usuario.username}** para usar \`/${comando}\`.`);
+
+        return interaction.reply({ embeds: [embed] });
+      }
+
+      if (subcommand === 'quitar') {
+        if (!permisos[usuario.id] || !permisos[usuario.id].includes(comando)) {
+          return interaction.reply({ content: `${usuario.username} no tiene permiso para usar /${comando}.`, ephemeral: true });
+        }
+
+        permisos[usuario.id] = permisos[usuario.id].filter(c => c !== comando);
+        if (permisos[usuario.id].length === 0) delete permisos[usuario.id];
+        savePermisos(permisos);
+
+        await enviarLog(interaction, 'permisos', `Quito permiso a ${usuario.username} (${usuario.id}) para usar /${comando}`);
+
+        const embed = new EmbedBuilder()
+          .setColor(0x8B0000)
+          .setDescription(`Se revoco el permiso a **${usuario.username}** para usar \`/${comando}\`.`);
+
+        return interaction.reply({ embeds: [embed] });
+      }
+
+      if (subcommand === 'ver') {
+        const permisosUsuario = permisos[usuario.id] || [];
+        
+        let descripcion;
+        if (permisosUsuario.length === 0) {
+          descripcion = `**${usuario.username}** no tiene permisos personalizados.`;
+        } else {
+          descripcion = `**${usuario.username}** tiene permiso para usar:\n` + permisosUsuario.map(c => `- \`/${c}\``).join('\n');
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor(0x8B0000)
+          .setTitle('PERMISOS DE USUARIO')
+          .setDescription(descripcion);
+
+        return interaction.reply({ embeds: [embed] });
+      }
     }
 
     // ===== TS3 =====
@@ -797,126 +912,6 @@ client.on('interactionCreate', async interaction => {
         .setFooter({ text: fechaHoy + ' | Generado por ' + interaction.user.username });
 
       return interaction.reply({ embeds: [embed] });
-    }
-
-    // ===== ANUNCIOS =====
-    if (interaction.commandName === 'anuncios') {
-      if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
-      }
-
-      const texto = interaction.options.getString('texto');
-      const canal = await obtenerCanal(CANAL_ANUNCIOS);
-
-      if (!canal || !canal.isTextBased()) {
-        return interaction.reply({ content: 'No se pudo acceder al canal de anuncios.', ephemeral: true });
-      }
-
-      const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
-
-      const embed = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setDescription(textoFormateado);
-
-      await canal.send({ embeds: [embed] });
-
-      await enviarLog(interaction, 'anuncios', `Envio anuncio al canal #${canal.name}: "${textoFormateado}"`);
-
-      const embedConfirmacion = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setDescription('Anuncio enviado correctamente.');
-
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
-    }
-
-    // ===== ANUNCIOSLS1 =====
-    if (interaction.commandName === 'anunciosls1') {
-      if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
-      }
-
-      const texto = interaction.options.getString('texto');
-      const canal = await obtenerCanal(CANAL_ANUNCIOS_LS);
-
-      if (!canal || !canal.isTextBased()) {
-        return interaction.reply({ content: 'No se pudo acceder al canal.', ephemeral: true });
-      }
-
-      const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
-
-      const embed = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setDescription(textoFormateado);
-
-      await canal.send({ embeds: [embed] });
-
-      await enviarLog(interaction, 'anunciosls1', `Envio anuncio a LS1: "${textoFormateado}"`);
-
-      const embedConfirmacion = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setDescription('Anuncio enviado a LS1 correctamente.');
-
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
-    }
-
-    // ===== ANUNCIOSLS2 =====
-    if (interaction.commandName === 'anunciosls2') {
-      if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
-      }
-
-      const texto = interaction.options.getString('texto');
-      const canal = await obtenerCanal(CANAL_ANUNCIOS_LS);
-
-      if (!canal || !canal.isTextBased()) {
-        return interaction.reply({ content: 'No se pudo acceder al canal.', ephemeral: true });
-      }
-
-      const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
-
-      const embed = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setDescription(textoFormateado);
-
-      await canal.send({ embeds: [embed] });
-
-      await enviarLog(interaction, 'anunciosls2', `Envio anuncio a LS2: "${textoFormateado}"`);
-
-      const embedConfirmacion = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setDescription('Anuncio enviado a LS2 correctamente.');
-
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
-    }
-
-    // ===== ANUNCIOSCH =====
-    if (interaction.commandName === 'anunciosch') {
-      if (!tieneAlgunRol(interaction.member, ROLES_ANUNCIOS)) {
-        return interaction.reply({ content: 'Acceso denegado. Comando exclusivo para personal autorizado.', ephemeral: true });
-      }
-
-      const texto = interaction.options.getString('texto');
-      const canal = await obtenerCanal(CANAL_ANUNCIOS_CH);
-
-      if (!canal || !canal.isTextBased()) {
-        return interaction.reply({ content: 'No se pudo acceder al canal.', ephemeral: true });
-      }
-
-      const textoFormateado = texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase();
-
-      const embed = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setDescription(textoFormateado);
-
-      await canal.send({ embeds: [embed] });
-
-      await enviarLog(interaction, 'anunciosch', `Envio anuncio a CH: "${textoFormateado}"`);
-
-      const embedConfirmacion = new EmbedBuilder()
-        .setColor(0x8B0000)
-        .setDescription('Anuncio enviado a CH correctamente.');
-
-      return interaction.reply({ embeds: [embedConfirmacion], ephemeral: true });
     }
 
     // ===== SIACEPTO =====
